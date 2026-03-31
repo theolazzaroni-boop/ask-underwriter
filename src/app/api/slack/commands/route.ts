@@ -46,8 +46,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Missing trigger_id' }, { status: 400 })
   }
 
-  // Fire-and-forget — must respond to Slack within 3s
-  fetch('https://slack.com/api/views.open', {
+  await fetch('https://slack.com/api/views.open', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
