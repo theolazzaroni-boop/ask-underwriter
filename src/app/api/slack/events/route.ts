@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { waitUntil } from '@vercel/functions'
 import { verifySlackSignature, slack, PRIORITY_LABELS } from '@/lib/slack'
 import { getSupabaseAdmin } from '@/lib/supabase'
 
 async function processSubmission(payload: Record<string, unknown>) {
-  const values = (payload.view as Record<string, unknown> & { state: { values: Record<string, Record<string, { selected_option?: { value: string }; value?: string }>> } }).state.values
+  const values = (payload.view as { state: { values: Record<string, Record<string, { selected_option?: { value: string }; value?: string }>> } }).state.values
   const product = values.product.value.selected_option?.value ?? ''
   const priority = values.priority.value.selected_option?.value ?? 'normal'
   const description = values.description.value.value ?? ''
@@ -113,7 +112,7 @@ export async function POST(req: NextRequest) {
     payload.view.callback_id === 'ask_underwriter_submit'
   ) {
     // Respond immediately to close the modal, process in background
-    waitUntil(processSubmission(payload))
+    processSubmission(payload).catch(console.error)
     return new NextResponse(null, { status: 200 })
   }
 

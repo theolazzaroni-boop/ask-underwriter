@@ -9,7 +9,6 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@vercel/functions": "^2.0.0",
     "@slack/bolt": "^4.6.0",
     "@slack/types": "^2.20.1",
     "@slack/web-api": "^7.15.0",
