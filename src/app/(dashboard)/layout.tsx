@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState, useEffect } from 'react'
-import { MessageSquare, Clock, CheckCircle, User, BarChart2 } from 'lucide-react'
+import { MessageSquare, User, BarChart2 } from 'lucide-react'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -37,12 +37,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     setEditing(false)
   }
 
-  const currentStatus = new URLSearchParams(
-    typeof window !== 'undefined' ? window.location.search : ''
-  ).get('status')
-
   const isQueueActive = pathname.startsWith('/queue')
-  const isDashboardActive = pathname.startsWith('/dashboard')
+  const isAnalysesActive = pathname.startsWith('/analyses') || pathname.startsWith('/dashboard')
 
   return (
     <div className="flex h-full min-h-screen">
@@ -57,61 +53,39 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </div>
 
-        <nav className="flex-1 px-3 py-4 space-y-4">
-          {/* Questions section */}
-          <div>
-            <p className="px-3 mb-1 text-xs font-semibold text-gray-400 uppercase tracking-wider">Questions</p>
-            {[
-              { href: '/queue?status=pending', label: 'En attente', icon: MessageSquare, match: 'pending' as const },
-              { href: '/queue?status=in_progress', label: 'En cours', icon: Clock, match: 'in_progress' as const },
-              { href: '/queue?status=answered', label: 'Traités', icon: CheckCircle, match: 'answered' as const },
-            ].map((item) => {
-              const Icon = item.icon
-              const isActive = isQueueActive && (currentStatus === item.match || (!currentStatus && item.match === 'pending'))
-              const count = counts[item.match]
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
-                    isActive ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-                  }`}
-                >
-                  <Icon className="w-4 h-4 shrink-0" />
-                  <span className="flex-1">{item.label}</span>
-                  {item.match === 'pending' && count > 0 && (
-                    <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full bg-red-100 text-red-700">
-                      {count}
-                    </span>
-                  )}
-                  {item.match === 'pending' && count === 0 && (
-                    <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500">
-                      0
-                    </span>
-                  )}
-                  {item.match === 'in_progress' && count > 0 && (
-                    <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700">
-                      {count}
-                    </span>
-                  )}
-                </Link>
-              )
-            })}
-          </div>
+        <nav className="flex-1 px-3 py-4 space-y-1">
+          <p className="px-3 mb-1 text-xs font-semibold text-gray-400 uppercase tracking-wider">Navigation</p>
 
-          {/* Dashboard section */}
-          <div>
-            <p className="px-3 mb-1 text-xs font-semibold text-gray-400 uppercase tracking-wider">Analyse</p>
-            <Link
-              href="/dashboard"
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
-                isDashboardActive ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-              }`}
-            >
-              <BarChart2 className="w-4 h-4 shrink-0" />
-              Dashboard
-            </Link>
-          </div>
+          {/* Questions link */}
+          <Link
+            href="/queue"
+            className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+              isQueueActive ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+            }`}
+          >
+            <MessageSquare className="w-4 h-4 shrink-0" />
+            <span className="flex-1">Questions</span>
+            {counts.pending > 0 ? (
+              <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full bg-red-100 text-red-700">
+                {counts.pending}
+              </span>
+            ) : (
+              <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500">
+                0
+              </span>
+            )}
+          </Link>
+
+          {/* Analyses link */}
+          <Link
+            href="/analyses"
+            className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+              isAnalysesActive ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+            }`}
+          >
+            <BarChart2 className="w-4 h-4 shrink-0" />
+            <span className="flex-1">Analyses</span>
+          </Link>
         </nav>
 
         {/* Underwriter identity */}
