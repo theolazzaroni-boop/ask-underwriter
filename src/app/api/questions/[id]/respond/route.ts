@@ -61,5 +61,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     sql`UPDATE questions SET status = 'answered', assigned_to = ${underwriter_name} WHERE id = ${id}`,
   ])
 
+  // Enrich knowledge base
+  await sql`
+    INSERT INTO knowledge_base (product, question_text, answer_text, source)
+    VALUES (${question.product_type}, ${question.description}, ${content}, 'app')
+  `.catch(() => {}) // non-blocking, don't fail the request
+
   return NextResponse.json({ success: true, answer })
 }
