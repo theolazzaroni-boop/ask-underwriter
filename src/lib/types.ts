@@ -2,13 +2,15 @@ export type QuestionStatus = 'pending' | 'in_progress' | 'answered'
 export type QuestionPriority = 'normal' | 'high' | 'urgent'
 
 export const PRODUCT_TYPES = [
-  'RCP / RCP réglementée',
+  'RCPH',
+  'RCPHes',
+  'RCPA',
+  'RCPAxa',
   'MRPH',
   'MRPW',
-  'TDMI',
-  'SMRPH',
-  'MRP Bureaux',
-  'Autre',
+  'MRPW-es',
+  'MRPA',
+  'MUTA',
 ] as const
 
 export type ProductType = (typeof PRODUCT_TYPES)[number]
