@@ -41,7 +41,7 @@ export default async function QueuePage({
     ORDER BY q.created_at DESC
   `
 
-  const sorted = (questions as QuestionWithAnswers[]).sort(
+  const sorted = (questions as unknown as QuestionWithAnswers[]).sort(
     (a, b) => PRIORITY_CONFIG[a.priority].order - PRIORITY_CONFIG[b.priority].order
   )
 
