@@ -10,11 +10,24 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [underwriterName, setUnderwriterName] = useState('')
   const [editing, setEditing] = useState(false)
   const [nameInput, setNameInput] = useState('')
+  const [counts, setCounts] = useState({ pending: 0, in_progress: 0, answered: 0 })
 
   useEffect(() => {
     const saved = localStorage.getItem('underwriter_name')
     if (saved) setUnderwriterName(saved)
     else setEditing(true)
+  }, [])
+
+  useEffect(() => {
+    function fetchCounts() {
+      fetch('/api/questions/counts')
+        .then(r => r.json())
+        .then(data => setCounts(data))
+        .catch(() => {})
+    }
+    fetchCounts()
+    const interval = setInterval(fetchCounts, 30000)
+    return () => clearInterval(interval)
   }, [])
 
   function saveName() {
@@ -49,12 +62,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div>
             <p className="px-3 mb-1 text-xs font-semibold text-gray-400 uppercase tracking-wider">Questions</p>
             {[
-              { href: '/queue?status=pending', label: 'En attente', icon: MessageSquare, match: 'pending' },
-              { href: '/queue?status=in_progress', label: 'En cours', icon: Clock, match: 'in_progress' },
-              { href: '/queue?status=answered', label: 'Traités', icon: CheckCircle, match: 'answered' },
+              { href: '/queue?status=pending', label: 'En attente', icon: MessageSquare, match: 'pending' as const },
+              { href: '/queue?status=in_progress', label: 'En cours', icon: Clock, match: 'in_progress' as const },
+              { href: '/queue?status=answered', label: 'Traités', icon: CheckCircle, match: 'answered' as const },
             ].map((item) => {
               const Icon = item.icon
               const isActive = isQueueActive && (currentStatus === item.match || (!currentStatus && item.match === 'pending'))
+              const count = counts[item.match]
               return (
                 <Link
                   key={item.href}
@@ -64,7 +78,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   }`}
                 >
                   <Icon className="w-4 h-4 shrink-0" />
-                  {item.label}
+                  <span className="flex-1">{item.label}</span>
+                  {item.match === 'pending' && count > 0 && (
+                    <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full bg-red-100 text-red-700">
+                      {count}
+                    </span>
+                  )}
+                  {item.match === 'pending' && count === 0 && (
+                    <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500">
+                      0
+                    </span>
+                  )}
+                  {item.match === 'in_progress' && count > 0 && (
+                    <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                      {count}
+                    </span>
+                  )}
                 </Link>
               )
             })}

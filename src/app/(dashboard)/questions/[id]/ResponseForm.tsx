@@ -1,21 +1,39 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Send, Loader2 } from 'lucide-react'
+import { Send, Loader2, ChevronDown } from 'lucide-react'
+import { getTemplates } from '@/lib/templates'
 
 export default function ResponseForm({
   questionId,
   currentStatus,
+  productType,
 }: {
   questionId: string
   currentStatus: string
+  productType: string
 }) {
   const router = useRouter()
   const [content, setContent] = useState('')
   const [loading, setLoading] = useState(false)
   const [takingCharge, setTakingCharge] = useState(false)
   const [error, setError] = useState('')
+  const [templatesOpen, setTemplatesOpen] = useState(false)
+  const templatesRef = useRef<HTMLDivElement>(null)
+  const templates = getTemplates(productType)
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (templatesRef.current && !templatesRef.current.contains(e.target as Node)) {
+        setTemplatesOpen(false)
+      }
+    }
+    if (templatesOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [templatesOpen])
 
   function getUnderwriterName() {
     return localStorage.getItem('underwriter_name') ?? ''
@@ -83,6 +101,35 @@ export default function ResponseForm({
       )}
 
       <form onSubmit={handleSubmit} className="space-y-3">
+        {/* Templates button */}
+        <div className="relative" ref={templatesRef}>
+          <button
+            type="button"
+            onClick={() => setTemplatesOpen(o => !o)}
+            className="flex items-center gap-1.5 text-sm text-gray-600 border border-gray-300 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition-colors"
+          >
+            Templates
+            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${templatesOpen ? 'rotate-180' : ''}`} />
+          </button>
+          {templatesOpen && (
+            <div className="absolute z-10 top-full left-0 mt-1 w-72 bg-white border border-gray-200 rounded-xl shadow-lg py-1">
+              {templates.map((tpl) => (
+                <button
+                  key={tpl.label}
+                  type="button"
+                  onClick={() => {
+                    setContent(tpl.content)
+                    setTemplatesOpen(false)
+                  }}
+                  className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  {tpl.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         <textarea
           value={content}
           onChange={(e) => setContent(e.target.value)}

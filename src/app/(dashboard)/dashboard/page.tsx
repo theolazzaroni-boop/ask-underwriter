@@ -56,6 +56,22 @@ export default function DashboardPage() {
     })
   }, [questions, period, product, underwriter, sales, status])
 
+  const prevFiltered = useMemo(() => {
+    if (period === 'all') return []
+    const days = parseInt(period)
+    const periodStart = startOfDay(subDays(new Date(), days))
+    const prevStart = startOfDay(subDays(new Date(), days * 2))
+    return questions.filter(q => {
+      const date = new Date(q.created_at)
+      if (date < prevStart || date >= periodStart) return false
+      if (product !== 'all' && q.product_type !== product) return false
+      if (underwriter !== 'all' && q.assigned_to !== underwriter) return false
+      if (sales !== 'all' && q.sales_name !== sales) return false
+      if (status !== 'all' && q.status !== status) return false
+      return true
+    })
+  }, [questions, period, product, underwriter, sales, status])
+
   const stats = useMemo(() => {
     const total = filtered.length
     const answered = filtered.filter(q => q.status === 'answered').length
@@ -65,8 +81,12 @@ export default function DashboardPage() {
       .filter(q => q.status === 'answered' && q.answers?.length > 0)
       .map(q => new Date(q.answers[0].created_at).getTime() - new Date(q.created_at).getTime())
 
-    const avgHours = responseTimes.length > 0
-      ? Math.round(responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length / (1000 * 60 * 60))
+    const avgMs = responseTimes.length > 0
+      ? responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length
+      : null
+    const avgHours = avgMs !== null ? avgMs / (1000 * 60 * 60) : null
+    const avgHoursDisplay = avgHours !== null
+      ? (avgHours < 1 ? '< 1h' : `${Math.round(avgHours)}h`)
       : null
 
     const byProduct: Record<string, number> = {}
@@ -77,16 +97,29 @@ export default function DashboardPage() {
       if (q.assigned_to) byUnderwriter[q.assigned_to] = (byUnderwriter[q.assigned_to] || 0) + 1
     })
 
-    return { total, answered, pending, avgHours, byProduct, byUnderwriter }
-  }, [filtered])
+    // Previous period stats for trends
+    const prevTotal = prevFiltered.length
+    const prevAnswered = prevFiltered.filter(q => q.status === 'answered').length
+    const prevPending = prevFiltered.filter(q => q.status === 'pending').length
+    const prevResponseTimes = prevFiltered
+      .filter(q => q.status === 'answered' && q.answers?.length > 0)
+      .map(q => new Date(q.answers[0].created_at).getTime() - new Date(q.created_at).getTime())
+    const prevAvgMs = prevResponseTimes.length > 0
+      ? prevResponseTimes.reduce((a, b) => a + b, 0) / prevResponseTimes.length
+      : null
+    const prevAvgHours = prevAvgMs !== null ? prevAvgMs / (1000 * 60 * 60) : null
+
+    return { total, answered, pending, avgHours, avgHoursDisplay, byProduct, byUnderwriter, prevTotal, prevAnswered, prevPending, prevAvgHours }
+  }, [filtered, prevFiltered])
 
   function exportCSV() {
     const headers = ['Date', 'Commercial', 'Produit', 'Priorité', 'Statut', 'Underwriter', 'Description', 'Temps de réponse (h)']
     const rows = filtered.map(q => {
       const firstAnswer = q.answers?.[0]
-      const responseHours = firstAnswer
-        ? Math.round((new Date(firstAnswer.created_at).getTime() - new Date(q.created_at).getTime()) / (1000 * 60 * 60))
-        : ''
+      const responseMs = firstAnswer
+        ? (new Date(firstAnswer.created_at).getTime() - new Date(q.created_at).getTime())
+        : null
+      const responseHours = responseMs !== null ? Math.round(responseMs / (1000 * 60 * 60)) : ''
       return [
         format(new Date(q.created_at), 'dd/MM/yyyy HH:mm'),
         q.sales_name,
@@ -159,16 +192,55 @@ export default function DashboardPage() {
       {/* Stats cards */}
       <div className="grid grid-cols-4 gap-4 mb-6">
         {[
-          { label: 'Total demandes', value: stats.total, color: 'text-gray-900' },
-          { label: 'En attente', value: stats.pending, color: 'text-orange-600' },
-          { label: 'Traitées', value: stats.answered, color: 'text-green-600' },
-          { label: 'Temps moyen', value: stats.avgHours !== null ? `${stats.avgHours}h` : '—', color: 'text-blue-600' },
-        ].map(card => (
-          <div key={card.label} className="bg-white rounded-xl border border-gray-200 p-4">
-            <p className="text-xs text-gray-500 mb-1">{card.label}</p>
-            <p className={`text-2xl font-bold ${card.color}`}>{card.value}</p>
-          </div>
-        ))}
+          {
+            label: 'Total demandes',
+            value: stats.total,
+            color: 'text-gray-900',
+            prev: stats.prevTotal,
+            trendPositive: (diff: number) => diff > 0,
+          },
+          {
+            label: 'En attente',
+            value: stats.pending,
+            color: 'text-orange-600',
+            prev: stats.prevPending,
+            trendPositive: (diff: number) => diff < 0, // fewer pending = better
+          },
+          {
+            label: 'Traitées',
+            value: stats.answered,
+            color: 'text-green-600',
+            prev: stats.prevAnswered,
+            trendPositive: (diff: number) => diff > 0,
+          },
+          {
+            label: 'Temps moyen',
+            value: stats.avgHoursDisplay ?? '—',
+            color: 'text-blue-600',
+            prev: stats.prevAvgHours !== null && stats.avgHours !== null ? Math.round(stats.prevAvgHours) : null,
+            trendPositive: (diff: number) => diff < 0, // less time = better
+            customDiff: stats.avgHours !== null && stats.prevAvgHours !== null
+              ? Math.round(stats.avgHours) - Math.round(stats.prevAvgHours)
+              : null,
+          },
+        ].map(card => {
+          const hasTrend = period !== 'all' && card.prev !== null && card.prev !== undefined
+          const diff = hasTrend
+            ? (card.customDiff !== undefined ? card.customDiff : (typeof card.value === 'number' ? card.value - (card.prev as number) : null))
+            : null
+          const isPositive = diff !== null ? card.trendPositive(diff) : false
+          return (
+            <div key={card.label} className="bg-white rounded-xl border border-gray-200 p-4">
+              <p className="text-xs text-gray-500 mb-1">{card.label}</p>
+              <p className={`text-2xl font-bold ${card.color}`}>{card.value}</p>
+              {hasTrend && diff !== null && (
+                <p className={`text-xs mt-1 font-medium ${isPositive ? 'text-green-600' : diff === 0 ? 'text-gray-400' : 'text-red-500'}`}>
+                  {diff > 0 ? '+' : ''}{card.label === 'Temps moyen' ? `${diff}h` : diff} vs période préc.
+                </p>
+              )}
+            </div>
+          )
+        })}
       </div>
 
       {/* Breakdowns */}
@@ -232,8 +304,12 @@ export default function DashboardPage() {
               <tbody>
                 {filtered.map((q, i) => {
                   const firstAnswer = q.answers?.[0]
-                  const responseHours = firstAnswer
-                    ? Math.round((new Date(firstAnswer.created_at).getTime() - new Date(q.created_at).getTime()) / (1000 * 60 * 60))
+                  const responseMs = firstAnswer
+                    ? (new Date(firstAnswer.created_at).getTime() - new Date(q.created_at).getTime())
+                    : null
+                  const responseHoursRaw = responseMs !== null ? responseMs / (1000 * 60 * 60) : null
+                  const responseHours = responseHoursRaw !== null
+                    ? (responseHoursRaw < 1 ? '< 1h' : `${Math.round(responseHoursRaw)}h`)
                     : null
                   return (
                     <tr key={q.id} className={`border-b border-gray-100 hover:bg-gray-50 ${i === filtered.length - 1 ? 'border-b-0' : ''}`}>
@@ -253,7 +329,7 @@ export default function DashboardPage() {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{q.assigned_to || '—'}</td>
-                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{responseHours !== null ? `${responseHours}h` : '—'}</td>
+                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{responseHours !== null ? responseHours : '—'}</td>
                     </tr>
                   )
                 })}

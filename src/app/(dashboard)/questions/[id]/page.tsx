@@ -149,7 +149,7 @@ export default async function QuestionPage({ params }: { params: Promise<{ id: s
 
       {/* Response form (only if not yet answered) */}
       {question.status !== 'answered' && (
-        <ResponseForm questionId={question.id} currentStatus={question.status} />
+        <ResponseForm questionId={question.id} currentStatus={question.status} productType={question.product_type} />
       )}
 
       {question.status === 'answered' && (
