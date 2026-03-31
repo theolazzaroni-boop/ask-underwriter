@@ -73,6 +73,17 @@ export function buildAskModal(channelId: string) {
         },
         label: { type: 'plain_text' as const, text: 'Lien Back-Office (facultatif)' },
       },
+      {
+        type: 'input',
+        block_id: 'hubspot_url',
+        optional: true,
+        element: {
+          type: 'plain_text_input' as const,
+          action_id: 'value',
+          placeholder: { type: 'plain_text' as const, text: 'https://app.hubspot.com/contacts/...' },
+        },
+        label: { type: 'plain_text' as const, text: 'Lien HubSpot (facultatif)' },
+      },
     ],
   }
 }

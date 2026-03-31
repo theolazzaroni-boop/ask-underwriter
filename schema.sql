@@ -6,6 +6,7 @@ create table if not exists questions (
   product_type text not null,
   description text not null,
   bo_url text,
+  hubspot_url text,
   status text default 'pending' check (status in ('pending', 'in_progress', 'answered')),
   priority text default 'normal' check (priority in ('normal', 'high', 'urgent')),
   sales_slack_id text not null,

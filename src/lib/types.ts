@@ -19,6 +19,7 @@ export interface Question {
   product_type: string
   description: string
   bo_url: string | null
+  hubspot_url: string | null
   status: QuestionStatus
   priority: QuestionPriority
   sales_slack_id: string

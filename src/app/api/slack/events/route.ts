@@ -29,6 +29,7 @@ export async function POST(req: NextRequest) {
     const priority = values.priority.value.selected_option?.value ?? 'normal'
     const description = values.description.value.value ?? ''
     const boUrl = values.bo_url?.value?.value ?? null
+    const hubspotUrl = values.hubspot_url?.value?.value ?? null
     const channelId = payload.view.private_metadata
     const user = payload.user
 
@@ -40,6 +41,7 @@ export async function POST(req: NextRequest) {
         product_type: product,
         description,
         bo_url: boUrl || null,
+        hubspot_url: hubspotUrl || null,
         priority,
         sales_slack_id: user.id,
         sales_name: user.username,
@@ -73,6 +75,9 @@ export async function POST(req: NextRequest) {
             { type: 'mrkdwn', text: `*Priorité*\n${priorityLabel}` },
             ...(boUrl
               ? [{ type: 'mrkdwn', text: `*Back-Office*\n<${boUrl}|Voir le dossier>` }]
+              : []),
+            ...(hubspotUrl
+              ? [{ type: 'mrkdwn', text: `*HubSpot*\n<${hubspotUrl}|Voir le contact>` }]
               : []),
           ],
         },
