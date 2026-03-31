@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin } from '@/lib/supabase'
 import { slack } from '@/lib/slack'
+import sql from '@/lib/db'
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -10,36 +10,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'content and underwriter_name are required' }, { status: 400 })
   }
 
-  const supabase = getSupabaseAdmin()
+  const [question] = await sql`SELECT * FROM questions WHERE id = ${id}`
 
-  // Get the question
-  const { data: question, error: qError } = await supabase
-    .from('questions')
-    .select('*')
-    .eq('id', id)
-    .single()
-
-  if (qError || !question) {
+  if (!question) {
     return NextResponse.json({ error: 'Question not found' }, { status: 404 })
   }
 
-  // Save the answer
-  const { data: answer, error: aError } = await supabase
-    .from('answers')
-    .insert({
-      question_id: id,
-      underwriter_name,
-      content,
-      sent_to_slack: false,
-    })
-    .select()
-    .single()
+  const [answer] = await sql`
+    INSERT INTO answers (question_id, underwriter_name, content, sent_to_slack)
+    VALUES (${id}, ${underwriter_name}, ${content}, false)
+    RETURNING *
+  `
 
-  if (aError) {
-    return NextResponse.json({ error: aError.message }, { status: 500 })
-  }
-
-  // Post to Slack thread
   let sentToSlack = false
   if (question.slack_channel_id && question.slack_thread_ts) {
     const responseTimeMs = Date.now() - new Date(question.created_at).getTime()
@@ -64,12 +46,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           },
           {
             type: 'context',
-            elements: [
-              {
-                type: 'mrkdwn',
-                text: `⏱️ Traité en ${timeLabel}`,
-              },
-            ],
+            elements: [{ type: 'mrkdwn', text: `⏱️ Traité en ${timeLabel}` }],
           },
         ],
       })
@@ -79,13 +56,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
   }
 
-  // Update answer + question status
   await Promise.all([
-    supabase.from('answers').update({ sent_to_slack: sentToSlack }).eq('id', answer.id),
-    supabase
-      .from('questions')
-      .update({ status: 'answered', assigned_to: underwriter_name })
-      .eq('id', id),
+    sql`UPDATE answers SET sent_to_slack = ${sentToSlack} WHERE id = ${answer.id}`,
+    sql`UPDATE questions SET status = 'answered', assigned_to = ${underwriter_name} WHERE id = ${id}`,
   ])
 
   return NextResponse.json({ success: true, answer })

@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { getSupabaseAdmin } from '@/lib/supabase'
+import sql from '@/lib/db'
 import { QuestionWithAnswers, QuestionPriority, QuestionStatus } from '@/lib/types'
 import { format, formatDistanceToNow } from 'date-fns'
 import { fr } from 'date-fns/locale'
@@ -21,15 +21,16 @@ const STATUS_CONFIG: Record<QuestionStatus, { label: string; icon: React.Element
 
 export default async function QuestionPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = getSupabaseAdmin()
 
-  const { data, error } = await supabase
-    .from('questions')
-    .select('*, answers(*)')
-    .eq('id', id)
-    .single()
+  const [data] = await sql`
+    SELECT q.*, json_agg(a.* ORDER BY a.created_at ASC) FILTER (WHERE a.id IS NOT NULL) as answers
+    FROM questions q
+    LEFT JOIN answers a ON a.question_id = q.id
+    WHERE q.id = ${id}
+    GROUP BY q.id
+  `
 
-  if (error || !data) notFound()
+  if (!data) notFound()
 
   const question = data as QuestionWithAnswers
   const priority = PRIORITY_CONFIG[question.priority]

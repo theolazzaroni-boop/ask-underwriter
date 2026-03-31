@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { getSupabaseAdmin } from '@/lib/supabase'
+import sql from '@/lib/db'
 import { QuestionWithAnswers, QuestionPriority, QuestionStatus } from '@/lib/types'
 import { formatDistanceToNow } from 'date-fns'
 import { fr } from 'date-fns/locale'
@@ -32,24 +32,23 @@ export default async function QueuePage({
   const status: QuestionStatus =
     rawStatus === 'in_progress' || rawStatus === 'answered' ? rawStatus : 'pending'
 
-  const supabase = getSupabaseAdmin()
-  const { data: questions } = await supabase
-    .from('questions')
-    .select('*, answers(*)')
-    .eq('status', status)
-    .order('created_at', { ascending: false })
+  const questions = await sql`
+    SELECT q.*, json_agg(a.*) FILTER (WHERE a.id IS NOT NULL) as answers
+    FROM questions q
+    LEFT JOIN answers a ON a.question_id = q.id
+    WHERE q.status = ${status}
+    GROUP BY q.id
+    ORDER BY q.created_at DESC
+  `
 
-  const sorted = ((questions as QuestionWithAnswers[]) ?? []).sort(
+  const sorted = (questions as QuestionWithAnswers[]).sort(
     (a, b) => PRIORITY_CONFIG[a.priority].order - PRIORITY_CONFIG[b.priority].order
   )
 
   const counts = await Promise.all(
     STATUS_TABS.map(async (tab) => {
-      const { count } = await supabase
-        .from('questions')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', tab.value)
-      return { value: tab.value, count: count ?? 0 }
+      const [{ count }] = await sql`SELECT COUNT(*) as count FROM questions WHERE status = ${tab.value}`
+      return { value: tab.value, count: Number(count) }
     })
   )
   const countMap = Object.fromEntries(counts.map((c) => [c.value, c.count]))

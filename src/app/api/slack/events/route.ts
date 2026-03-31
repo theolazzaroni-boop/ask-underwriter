@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifySlackSignature, slack, PRIORITY_LABELS } from '@/lib/slack'
-import { getSupabaseAdmin } from '@/lib/supabase'
+import sql from '@/lib/db'
 
 async function processSubmission(payload: Record<string, unknown>) {
   const values = (payload.view as { state: { values: Record<string, Record<string, { selected_option?: { value: string }; value?: string }>> } }).state.values
@@ -12,80 +12,66 @@ async function processSubmission(payload: Record<string, unknown>) {
   const channelId = (payload.view as { private_metadata: string }).private_metadata
   const user = payload.user as { id: string; username: string }
 
-  const supabase = getSupabaseAdmin()
+  const [question] = await sql`
+    INSERT INTO questions (product_type, description, bo_url, hubspot_url, priority, sales_slack_id, sales_name, slack_channel_id, status)
+    VALUES (${product}, ${description}, ${boUrl}, ${hubspotUrl}, ${priority}, ${user.id}, ${user.username}, ${channelId}, 'pending')
+    RETURNING *
+  `
 
-  const { data: question, error } = await supabase
-    .from('questions')
-    .insert({
-      product_type: product,
-      description,
-      bo_url: boUrl || null,
-      hubspot_url: hubspotUrl || null,
-      priority,
-      sales_slack_id: user.id,
-      sales_name: user.username,
-      slack_channel_id: channelId,
-      status: 'pending',
-    })
-    .select()
-    .single()
-
-  if (error) {
-    console.error('Failed to insert question:', error)
+  if (!question) {
+    console.error('Failed to insert question')
     return
   }
 
-  if (question) {
-    const dashboardUrl = `${process.env.NEXT_PUBLIC_APP_URL}/questions/${question.id}`
-    const priorityLabel = PRIORITY_LABELS[priority] ?? priority
+  const dashboardUrl = `${process.env.NEXT_PUBLIC_APP_URL}/questions/${question.id}`
+  const priorityLabel = PRIORITY_LABELS[priority] ?? priority
 
-    const blocks = [
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `*✅ Demande bien reçue* — <@${user.id}>\n\n>${description.slice(0, 300)}${description.length > 300 ? '...' : ''}`,
+  const blocks = [
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `*✅ Demande bien reçue* — <@${user.id}>\n\n>${description.slice(0, 300)}${description.length > 300 ? '...' : ''}`,
+      },
+    },
+    {
+      type: 'section',
+      fields: [
+        { type: 'mrkdwn', text: `*Produit*\n${product}` },
+        { type: 'mrkdwn', text: `*Priorité*\n${priorityLabel}` },
+        ...(boUrl ? [{ type: 'mrkdwn', text: `*Back-Office*\n<${boUrl}|Voir le dossier>` }] : []),
+        ...(hubspotUrl ? [{ type: 'mrkdwn', text: `*HubSpot*\n<${hubspotUrl}|Voir le contact>` }] : []),
+      ],
+    },
+    {
+      type: 'actions',
+      elements: [
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: '📋 Voir dans le dashboard' },
+          url: dashboardUrl,
+          style: 'primary',
         },
-      },
-      {
-        type: 'section',
-        fields: [
-          { type: 'mrkdwn', text: `*Produit*\n${product}` },
-          { type: 'mrkdwn', text: `*Priorité*\n${priorityLabel}` },
-          ...(boUrl ? [{ type: 'mrkdwn', text: `*Back-Office*\n<${boUrl}|Voir le dossier>` }] : []),
-          ...(hubspotUrl ? [{ type: 'mrkdwn', text: `*HubSpot*\n<${hubspotUrl}|Voir le contact>` }] : []),
-        ],
-      },
-      {
-        type: 'actions',
-        elements: [
-          {
-            type: 'button',
-            text: { type: 'plain_text', text: '📋 Voir dans le dashboard' },
-            url: dashboardUrl,
-            style: 'primary',
-          },
-        ],
-      },
-    ]
+      ],
+    },
+  ]
 
-    const msg = await slack.chat.postMessage({
-      channel: channelId,
-      blocks,
-      text: `Nouvelle demande ${product} de ${user.username} — ${priorityLabel}`,
+  const msg = await slack.chat.postMessage({
+    channel: channelId,
+    blocks,
+    text: `Nouvelle demande ${product} de ${user.username} — ${priorityLabel}`,
+  })
+
+  if (msg.ts) {
+    await sql`UPDATE questions SET slack_thread_ts = ${msg.ts} WHERE id = ${question.id}`
+  }
+
+  const underwritingChannel = process.env.SLACK_UNDERWRITING_CHANNEL_ID
+  if (underwritingChannel && underwritingChannel !== channelId) {
+    await slack.chat.postMessage({
+      channel: underwritingChannel,
+      text: `🔔 Nouvelle demande *${priorityLabel}* — *${product}* de <@${user.id}>\n<${dashboardUrl}|Voir dans le dashboard>`,
     })
-
-    if (msg.ts) {
-      await supabase.from('questions').update({ slack_thread_ts: msg.ts }).eq('id', question.id)
-    }
-
-    const underwritingChannel = process.env.SLACK_UNDERWRITING_CHANNEL_ID
-    if (underwritingChannel && underwritingChannel !== channelId) {
-      await slack.chat.postMessage({
-        channel: underwritingChannel,
-        text: `🔔 Nouvelle demande *${priorityLabel}* — *${product}* de <@${user.id}>\n<${dashboardUrl}|Voir dans le dashboard>`,
-      })
-    }
   }
 }
 
