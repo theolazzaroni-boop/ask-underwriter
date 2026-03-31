@@ -111,8 +111,7 @@ export async function POST(req: NextRequest) {
     payload.type === 'view_submission' &&
     payload.view.callback_id === 'ask_underwriter_submit'
   ) {
-    // Respond immediately to close the modal, process in background
-    processSubmission(payload).catch(console.error)
+    await processSubmission(payload)
     return new NextResponse(null, { status: 200 })
   }
 
