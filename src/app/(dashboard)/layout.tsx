@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState, useEffect } from 'react'
-import { MessageSquare, Clock, CheckCircle, User } from 'lucide-react'
+import { MessageSquare, Clock, CheckCircle, User, BarChart2 } from 'lucide-react'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -24,15 +24,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     setEditing(false)
   }
 
-  const navItems = [
-    { href: '/queue?status=pending', label: 'En attente', icon: MessageSquare, match: 'pending' },
-    { href: '/queue?status=in_progress', label: 'En cours', icon: Clock, match: 'in_progress' },
-    { href: '/queue?status=answered', label: 'Traités', icon: CheckCircle, match: 'answered' },
-  ]
-
   const currentStatus = new URLSearchParams(
     typeof window !== 'undefined' ? window.location.search : ''
   ).get('status')
+
+  const isQueueActive = pathname.startsWith('/queue')
+  const isDashboardActive = pathname.startsWith('/dashboard')
 
   return (
     <div className="flex h-full min-h-screen">
@@ -47,27 +44,45 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </div>
 
-        <nav className="flex-1 px-3 py-4 space-y-1">
-          {navItems.map((item) => {
-            const Icon = item.icon
-            const isActive =
-              pathname.startsWith('/queue') && currentStatus === item.match ||
-              (pathname.startsWith('/queue') && !currentStatus && item.match === 'pending')
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
-                  isActive
-                    ? 'bg-blue-50 text-blue-700 font-medium'
-                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-                }`}
-              >
-                <Icon className="w-4 h-4 shrink-0" />
-                {item.label}
-              </Link>
-            )
-          })}
+        <nav className="flex-1 px-3 py-4 space-y-4">
+          {/* Questions section */}
+          <div>
+            <p className="px-3 mb-1 text-xs font-semibold text-gray-400 uppercase tracking-wider">Questions</p>
+            {[
+              { href: '/queue?status=pending', label: 'En attente', icon: MessageSquare, match: 'pending' },
+              { href: '/queue?status=in_progress', label: 'En cours', icon: Clock, match: 'in_progress' },
+              { href: '/queue?status=answered', label: 'Traités', icon: CheckCircle, match: 'answered' },
+            ].map((item) => {
+              const Icon = item.icon
+              const isActive = isQueueActive && (currentStatus === item.match || (!currentStatus && item.match === 'pending'))
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+                    isActive ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                  }`}
+                >
+                  <Icon className="w-4 h-4 shrink-0" />
+                  {item.label}
+                </Link>
+              )
+            })}
+          </div>
+
+          {/* Dashboard section */}
+          <div>
+            <p className="px-3 mb-1 text-xs font-semibold text-gray-400 uppercase tracking-wider">Analyse</p>
+            <Link
+              href="/dashboard"
+              className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+                isDashboardActive ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+              }`}
+            >
+              <BarChart2 className="w-4 h-4 shrink-0" />
+              Dashboard
+            </Link>
+          </div>
         </nav>
 
         {/* Underwriter identity */}
@@ -93,10 +108,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
           ) : (
             <button
-              onClick={() => {
-                setNameInput(underwriterName)
-                setEditing(true)
-              }}
+              onClick={() => { setNameInput(underwriterName); setEditing(true) }}
               className="flex items-center gap-2 w-full text-left group"
             >
               <div className="w-7 h-7 bg-gray-200 rounded-full flex items-center justify-center shrink-0">
