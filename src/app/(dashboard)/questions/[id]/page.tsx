@@ -7,7 +7,7 @@ import { fr } from 'date-fns/locale'
 import { ArrowLeft, ExternalLink, CheckCircle } from 'lucide-react'
 import ResponseForm from './ResponseForm'
 import AttachmentsSection from './AttachmentsSection'
-import MarkDoneButton from './MarkDoneButton'
+import MarkDoneButton, { ReopenButton } from './MarkDoneButton'
 
 const PRIORITY_CONFIG: Record<QuestionPriority, { label: string; className: string }> = {
   urgent: { label: 'Urgent', className: 'text-red-600 font-semibold' },
@@ -176,9 +176,10 @@ export default async function QuestionPage({ params }: { params: Promise<{ id: s
       )}
 
       {question.status === 'answered' && (
-        <div className="text-center py-6 text-sm text-gray-400 flex items-center justify-center gap-2">
+        <div className="flex items-center justify-center gap-3 py-6 text-sm text-gray-400">
           <CheckCircle className="w-4 h-4 text-green-500" />
-          Cette demande a été traitée.
+          <span>Cette demande a été traitée.</span>
+          <ReopenButton questionId={question.id} />
         </div>
       )}
     </div>
