@@ -6,16 +6,16 @@ import QuestionCard from './QuestionCard'
 import SearchBar from './SearchBar'
 import { Suspense } from 'react'
 
-const PRIORITY_CONFIG: Record<QuestionPriority, { label: string; className: string; order: number }> = {
-  urgent: { label: 'Urgent', className: 'bg-red-100 text-red-700', order: 0 },
-  high: { label: 'Haute priorité', className: 'bg-yellow-100 text-yellow-700', order: 1 },
-  normal: { label: 'Normal', className: 'bg-green-100 text-green-700', order: 2 },
+const PRIORITY_CONFIG: Record<QuestionPriority, { order: number }> = {
+  urgent: { order: 0 },
+  high: { order: 1 },
+  normal: { order: 2 },
 }
 
-const STATUS_TABS: { value: QuestionStatus; label: string }[] = [
-  { value: 'pending', label: 'En attente' },
-  { value: 'in_progress', label: 'En cours' },
-  { value: 'answered', label: 'Traités' },
+const STATUS_TABS: { value: QuestionStatus; label: string; showCount: boolean }[] = [
+  { value: 'pending', label: 'En attente', showCount: true },
+  { value: 'in_progress', label: 'En cours', showCount: true },
+  { value: 'answered', label: 'Traités', showCount: false },
 ]
 
 export default async function QueuePage({
@@ -40,7 +40,6 @@ export default async function QueuePage({
     (a, b) => PRIORITY_CONFIG[a.priority].order - PRIORITY_CONFIG[b.priority].order
   )
 
-  // Server-side search filter
   if (search && search.trim()) {
     const term = search.trim().toLowerCase()
     sorted = sorted.filter(q =>
@@ -63,28 +62,26 @@ export default async function QueuePage({
     <div className="p-8 max-w-4xl">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Questions</h1>
-        <p className="text-sm text-gray-500 mt-1">Demandes des sales à traiter</p>
+        <p className="text-sm text-gray-400 mt-0.5">Demandes des sales à traiter</p>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-fit mb-6">
+      <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-fit mb-5">
         {STATUS_TABS.map((tab) => (
           <Link
             key={tab.value}
             href={`/queue?status=${tab.value}`}
-            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+            className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
               status === tab.value
                 ? 'bg-white text-gray-900 shadow-sm'
                 : 'text-gray-500 hover:text-gray-700'
             }`}
           >
             {tab.label}
-            {countMap[tab.value] > 0 && (
-              <span
-                className={`text-xs rounded-full px-1.5 py-0.5 ${
-                  status === tab.value ? 'bg-blue-100 text-blue-700' : 'bg-gray-200 text-gray-600'
-                }`}
-              >
+            {tab.showCount && countMap[tab.value] > 0 && (
+              <span className={`text-xs rounded-full px-1.5 py-0.5 ${
+                status === tab.value ? 'bg-gray-100 text-gray-700' : 'bg-gray-200 text-gray-500'
+              }`}>
                 {countMap[tab.value]}
               </span>
             )}
@@ -92,27 +89,24 @@ export default async function QueuePage({
         ))}
       </div>
 
-      {/* Search bar */}
       <Suspense>
         <SearchBar />
       </Suspense>
 
-      {/* No search results message */}
       {search && search.trim() && sorted.length === 0 && (
         <div className="text-center py-16 text-gray-400">
-          <AlertCircle className="w-10 h-10 mx-auto mb-3 opacity-40" />
+          <AlertCircle className="w-8 h-8 mx-auto mb-3 opacity-30" />
           <p className="text-sm">Aucun résultat pour &laquo;{search}&raquo;</p>
         </div>
       )}
 
-      {/* Questions list */}
       {(!search || !search.trim()) && sorted.length === 0 ? (
         <div className="text-center py-16 text-gray-400">
-          <AlertCircle className="w-10 h-10 mx-auto mb-3 opacity-40" />
+          <AlertCircle className="w-8 h-8 mx-auto mb-3 opacity-30" />
           <p className="text-sm">Aucune demande dans cette catégorie</p>
         </div>
       ) : sorted.length > 0 ? (
-        <div className="space-y-3">
+        <div className="space-y-2">
           {sorted.map((q) => (
             <QuestionCard key={q.id} question={q} />
           ))}

@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Send, LoaderCircle, ChevronDown } from 'lucide-react'
+import { Send, LoaderCircle, ChevronDown, Sparkles } from 'lucide-react'
 import { getTemplates } from '@/lib/templates'
 
 export default function ResponseForm({
@@ -25,6 +25,7 @@ export default function ResponseForm({
   const templatesRef = useRef<HTMLDivElement>(null)
   const templates = getTemplates(productType)
 
+  const [showAI, setShowAI] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [suggestion, setSuggestion] = useState('')
   const [basedOn, setBasedOn] = useState(0)
@@ -119,48 +120,50 @@ export default function ResponseForm({
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-6">
-      <h2 className="text-sm font-semibold text-gray-900 mb-4">Répondre</h2>
-
-      {currentStatus === 'pending' && (
-        <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-lg flex items-center justify-between">
-          <p className="text-sm text-orange-700">Cette demande n&apos;a pas encore été prise en charge.</p>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-sm font-semibold text-gray-900">Répondre</h2>
+        {currentStatus === 'pending' && (
           <button
             onClick={handleTakeCharge}
             disabled={takingCharge}
-            className="text-sm font-medium text-orange-700 hover:text-orange-900 underline disabled:opacity-50"
+            className="text-xs text-gray-500 hover:text-gray-800 underline underline-offset-2 disabled:opacity-50"
           >
             {takingCharge ? 'En cours...' : 'Prendre en charge'}
           </button>
-        </div>
-      )}
+        )}
+      </div>
 
-      {/* AI Suggestion */}
-      {currentStatus !== 'answered' && (
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4">
+      {/* AI Suggestion — hidden by default */}
+      {showAI ? (
+        <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-4">
           <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5" />
+              Suggestion IA
+            </span>
             <div className="flex items-center gap-2">
-              <span className="text-blue-600 text-sm font-semibold">✦ Suggestion IA</span>
+              <button
+                onClick={handleGenerate}
+                disabled={generating}
+                className="text-xs font-medium px-2.5 py-1 bg-gray-900 text-white rounded-lg hover:bg-gray-800 disabled:opacity-50 flex items-center gap-1.5 transition-colors"
+              >
+                {generating && <LoaderCircle className="w-3 h-3 animate-spin" />}
+                {suggestion ? 'Régénérer' : 'Générer'}
+              </button>
+              <button onClick={() => setShowAI(false)} className="text-xs text-gray-400 hover:text-gray-600">
+                Fermer
+              </button>
             </div>
-            <button
-              onClick={handleGenerate}
-              disabled={generating}
-              className="text-xs font-medium px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5 transition-colors"
-            >
-              {generating && <LoaderCircle className="w-3 h-3 animate-spin" />}
-              {suggestion ? 'Régénérer' : 'Générer'}
-            </button>
           </div>
 
-          {generatingError && (
-            <p className="text-xs text-red-500">{generatingError}</p>
-          )}
+          {generatingError && <p className="text-xs text-red-500">{generatingError}</p>}
 
           {!generating && !suggestion && !generatingError && (
-            <p className="text-xs text-blue-400 italic">Cliquez sur Générer pour obtenir une suggestion basée sur les réponses passées.</p>
+            <p className="text-xs text-gray-400 italic">Génère une suggestion basée sur les réponses passées.</p>
           )}
 
           {generating && !suggestion && (
-            <div className="flex items-center gap-2 text-xs text-blue-500">
+            <div className="flex items-center gap-2 text-xs text-gray-400">
               <LoaderCircle className="w-3 h-3 animate-spin" />
               Génération en cours...
             </div>
@@ -168,14 +171,14 @@ export default function ResponseForm({
 
           {suggestion && (
             <>
-              <div className="bg-white border border-blue-100 rounded-lg p-3 mb-2">
+              <div className="bg-white border border-gray-200 rounded-lg p-3 mb-2">
                 <p className="text-sm text-gray-700 whitespace-pre-wrap">{suggestion}</p>
               </div>
               <div className="flex items-center justify-between">
-                <p className="text-xs text-blue-400">Basé sur {basedOn} réponse{basedOn !== 1 ? 's' : ''} similaire{basedOn !== 1 ? 's' : ''}</p>
+                <p className="text-xs text-gray-400">Basé sur {basedOn} réponse{basedOn !== 1 ? 's' : ''} similaire{basedOn !== 1 ? 's' : ''}</p>
                 <button
                   onClick={() => setContent(suggestion)}
-                  className="text-xs font-medium px-3 py-1.5 bg-white border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 transition-colors"
+                  className="text-xs font-medium px-2.5 py-1 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
                 >
                   Utiliser
                 </button>
@@ -183,35 +186,48 @@ export default function ResponseForm({
             </>
           )}
         </div>
-      )}
+      ) : null}
 
       <form onSubmit={handleSubmit} className="space-y-3">
-        {/* Templates button */}
-        <div className="relative" ref={templatesRef}>
-          <button
-            type="button"
-            onClick={() => setTemplatesOpen(o => !o)}
-            className="flex items-center gap-1.5 text-sm text-gray-600 border border-gray-300 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition-colors"
-          >
-            Templates
-            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${templatesOpen ? 'rotate-180' : ''}`} />
-          </button>
-          {templatesOpen && (
-            <div className="absolute z-10 top-full left-0 mt-1 w-72 bg-white border border-gray-200 rounded-xl shadow-lg py-1">
-              {templates.map((tpl) => (
-                <button
-                  key={tpl.label}
-                  type="button"
-                  onClick={() => {
-                    setContent(tpl.content)
-                    setTemplatesOpen(false)
-                  }}
-                  className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                >
-                  {tpl.label}
-                </button>
-              ))}
-            </div>
+        {/* Toolbar */}
+        <div className="flex items-center gap-2">
+          <div className="relative" ref={templatesRef}>
+            <button
+              type="button"
+              onClick={() => setTemplatesOpen(o => !o)}
+              className="flex items-center gap-1.5 text-xs text-gray-500 border border-gray-200 rounded-lg px-2.5 py-1.5 hover:bg-gray-50 transition-colors"
+            >
+              Templates
+              <ChevronDown className={`w-3 h-3 transition-transform ${templatesOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {templatesOpen && (
+              <div className="absolute z-10 top-full left-0 mt-1 w-72 bg-white border border-gray-200 rounded-xl shadow-lg py-1">
+                {templates.map((tpl) => (
+                  <button
+                    key={tpl.label}
+                    type="button"
+                    onClick={() => {
+                      setContent(tpl.content)
+                      setTemplatesOpen(false)
+                    }}
+                    className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    {tpl.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {!showAI && (
+            <button
+              type="button"
+              onClick={() => { setShowAI(true); if (!suggestion) handleGenerate() }}
+              className="flex items-center gap-1.5 text-xs text-gray-500 border border-gray-200 rounded-lg px-2.5 py-1.5 hover:bg-gray-50 transition-colors"
+            >
+              <Sparkles className="w-3 h-3" />
+              Suggestion IA
+            </button>
           )}
         </div>
 
@@ -220,21 +236,21 @@ export default function ResponseForm({
           onChange={(e) => setContent(e.target.value)}
           placeholder="Écris ta réponse ici..."
           rows={5}
-          className="w-full text-sm border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+          className="w-full text-sm border border-gray-200 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none"
         />
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="flex justify-end">
           <button
             type="submit"
             disabled={loading || !content.trim()}
-            className="flex items-center gap-2 bg-blue-600 text-white text-sm font-medium px-5 py-2.5 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="flex items-center gap-2 bg-gray-900 text-white text-sm font-medium px-5 py-2.5 rounded-lg hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {loading ? (
               <LoaderCircle className="w-4 h-4 animate-spin" />
             ) : (
               <Send className="w-4 h-4" />
             )}
-            Envoyer dans Slack
+            Répondre
           </button>
         </div>
       </form>

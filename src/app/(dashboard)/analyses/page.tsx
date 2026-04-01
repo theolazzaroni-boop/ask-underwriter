@@ -33,7 +33,7 @@ const PERIOD_OPTIONS = [
   { value: '90', label: '90 derniers jours' },
 ]
 
-const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316', '#84cc16']
+const CHART_COLORS = ['#111827', '#4b5563', '#9ca3af', '#d1d5db', '#374151', '#6b7280', '#1f2937', '#e5e7eb']
 
 interface AnalyticsData {
   demandes_par_jour: { day: string; total: number }[]
@@ -137,7 +137,6 @@ export default function AnalysesPage() {
       if (q.assigned_to) byUnderwriter[q.assigned_to] = (byUnderwriter[q.assigned_to] || 0) + 1
     })
 
-    // Previous period stats for trends
     const prevTotal = prevFiltered.length
     const prevAnswered = prevFiltered.filter(q => q.status === 'answered').length
     const prevPending = prevFiltered.filter(q => q.status === 'pending').length
@@ -182,22 +181,21 @@ export default function AnalysesPage() {
   }
 
   if (loading) {
-    return <div className="p-8 text-sm text-gray-500">Chargement...</div>
+    return <div className="p-8 text-sm text-gray-400">Chargement...</div>
   }
 
-  const selectClass = "text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-700"
+  const selectClass = "text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-gray-900 bg-white text-gray-700"
 
   return (
     <div className="p-8 max-w-6xl">
-      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Analyses</h1>
-          <p className="text-sm text-gray-500 mt-1">Analyse des demandes underwriting</p>
+          <p className="text-sm text-gray-400 mt-0.5">Analyse des demandes underwriting</p>
         </div>
         <button
           onClick={exportCSV}
-          className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+          className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors"
         >
           <Download className="w-4 h-4" />
           Exporter CSV
@@ -205,7 +203,7 @@ export default function AnalysesPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-3 mb-6 p-4 bg-white rounded-xl border border-gray-200">
+      <div className="flex flex-wrap gap-2 mb-6 p-4 bg-white rounded-xl border border-gray-200">
         <select value={period} onChange={e => setPeriod(e.target.value)} className={selectClass}>
           {PERIOD_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
@@ -229,36 +227,17 @@ export default function AnalysesPage() {
         </select>
       </div>
 
-      {/* Stats cards */}
+      {/* KPI cards */}
       <div className="grid grid-cols-4 gap-4 mb-6">
         {[
-          {
-            label: 'Total demandes',
-            value: stats.total,
-            color: 'text-gray-900',
-            prev: stats.prevTotal,
-            trendPositive: (diff: number) => diff > 0,
-          },
-          {
-            label: 'En attente',
-            value: stats.pending,
-            color: 'text-orange-600',
-            prev: stats.prevPending,
-            trendPositive: (diff: number) => diff < 0,
-          },
-          {
-            label: 'Traitées',
-            value: stats.answered,
-            color: 'text-green-600',
-            prev: stats.prevAnswered,
-            trendPositive: (diff: number) => diff > 0,
-          },
+          { label: 'Total demandes', value: stats.total, prev: stats.prevTotal, trendPositive: (d: number) => d > 0 },
+          { label: 'En attente', value: stats.pending, prev: stats.prevPending, trendPositive: (d: number) => d < 0 },
+          { label: 'Traitées', value: stats.answered, prev: stats.prevAnswered, trendPositive: (d: number) => d > 0 },
           {
             label: 'Temps moyen',
             value: stats.avgHoursDisplay ?? '—',
-            color: 'text-blue-600',
             prev: stats.prevAvgHours !== null && stats.avgHours !== null ? Math.round(stats.prevAvgHours) : null,
-            trendPositive: (diff: number) => diff < 0,
+            trendPositive: (d: number) => d < 0,
             customDiff: stats.avgHours !== null && stats.prevAvgHours !== null
               ? Math.round(stats.avgHours) - Math.round(stats.prevAvgHours)
               : null,
@@ -271,10 +250,10 @@ export default function AnalysesPage() {
           const isPositive = diff !== null ? card.trendPositive(diff) : false
           return (
             <div key={card.label} className="bg-white rounded-xl border border-gray-200 p-4">
-              <p className="text-xs text-gray-500 mb-1">{card.label}</p>
-              <p className={`text-2xl font-bold ${card.color}`}>{card.value}</p>
+              <p className="text-xs text-gray-400 mb-1">{card.label}</p>
+              <p className="text-2xl font-bold text-gray-900">{card.value}</p>
               {hasTrend && diff !== null && (
-                <p className={`text-xs mt-1 font-medium ${isPositive ? 'text-green-600' : diff === 0 ? 'text-gray-400' : 'text-red-500'}`}>
+                <p className={`text-xs mt-1 font-medium ${isPositive ? 'text-gray-600' : diff === 0 ? 'text-gray-400' : 'text-red-500'}`}>
                   {diff > 0 ? '+' : ''}{card.label === 'Temps moyen' ? `${diff}h` : diff} vs période préc.
                 </p>
               )}
@@ -283,79 +262,57 @@ export default function AnalysesPage() {
         })}
       </div>
 
-      {/* Chart 1 — Demandes dans le temps (full width) */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
+      {/* Chart 1 */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4">
         <h3 className="text-sm font-semibold text-gray-900 mb-4">Demandes dans le temps</h3>
         <div className="h-56">
-          {(analyticsData?.demandes_par_jour ?? []).length === 0 ? (
-            <EmptyChart />
-          ) : (
+          {(analyticsData?.demandes_par_jour ?? []).length === 0 ? <EmptyChart /> : (
             <ResponsiveContainer width="100%" height={220}>
               <LineChart data={analyticsData?.demandes_par_jour ?? []}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis
-                  dataKey="day"
-                  tick={{ fontSize: 11 }}
-                  tickFormatter={(v) => format(new Date(v), 'dd/MM')}
-                />
+                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                <XAxis dataKey="day" tick={{ fontSize: 11 }} tickFormatter={(v) => format(new Date(v), 'dd/MM')} />
                 <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-                <Tooltip
-                  formatter={(v) => [v, 'Demandes']}
-                  labelFormatter={(l) => format(new Date(l), 'dd MMM yyyy', { locale: fr })}
-                />
-                <Line type="monotone" dataKey="total" stroke="#3b82f6" strokeWidth={2} dot={false} />
+                <Tooltip formatter={(v) => [v, 'Demandes']} labelFormatter={(l) => format(new Date(l), 'dd MMM yyyy', { locale: fr })} />
+                <Line type="monotone" dataKey="total" stroke="#111827" strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           )}
         </div>
       </div>
 
-      {/* Charts row — Pie + Bar */}
-      <div className="grid grid-cols-2 gap-4 mb-6">
-        {/* Chart 2 — Par produit */}
+      {/* Charts row */}
+      <div className="grid grid-cols-2 gap-4 mb-4">
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <h3 className="text-sm font-semibold text-gray-900 mb-4">Par produit</h3>
           <div className="h-56">
-            {(analyticsData?.par_produit ?? []).length === 0 ? (
-              <EmptyChart />
-            ) : (
+            {(analyticsData?.par_produit ?? []).length === 0 ? <EmptyChart /> : (
               <ResponsiveContainer width="100%" height={220}>
                 <PieChart>
-                  <Pie
-                    data={analyticsData?.par_produit ?? []}
-                    dataKey="total"
-                    nameKey="product"
-                    cx="40%"
-                    outerRadius={80}
-                    label={false}
-                  >
+                  <Pie data={analyticsData?.par_produit ?? []} dataKey="total" nameKey="product" cx="40%" outerRadius={80} label={false}>
                     {(analyticsData?.par_produit ?? []).map((_: unknown, i: number) => (
-                      <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                      <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
                     ))}
                   </Pie>
                   <Tooltip formatter={(v, n) => [v, n]} />
-                  <Legend layout="vertical" align="right" verticalAlign="middle" formatter={(v) => v} />
+                  <Legend layout="vertical" align="right" verticalAlign="middle" />
                 </PieChart>
               </ResponsiveContainer>
             )}
           </div>
         </div>
 
-        {/* Chart 3 — Par underwriter */}
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <h3 className="text-sm font-semibold text-gray-900 mb-4">Par underwriter</h3>
           <div className="h-56">
-            {(analyticsData?.par_underwriter ?? []).length === 0 ? (
-              <EmptyChart />
-            ) : (
+            {(analyticsData?.par_underwriter ?? []).length === 0 ? <EmptyChart /> : (
               <ResponsiveContainer width="100%" height={220}>
                 <BarChart data={analyticsData?.par_underwriter ?? []} layout="vertical" margin={{ left: 80 }}>
                   <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
                   <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={80} />
                   <Tooltip formatter={(v) => [v, 'Demandes traitées']} />
-                  <Bar dataKey="total" fill="#10b981" radius={[0, 4, 4, 0]}>
+                  <Bar dataKey="total" radius={[0, 4, 4, 0]}>
                     {(analyticsData?.par_underwriter ?? []).map((_: unknown, i: number) => (
-                      <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                      <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
                     ))}
                   </Bar>
                 </BarChart>
@@ -365,28 +322,22 @@ export default function AnalysesPage() {
         </div>
       </div>
 
-      {/* Chart 4 — Temps moyen par semaine (full width) */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
+      {/* Chart 4 */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4">
         <h3 className="text-sm font-semibold text-gray-900 mb-4">Temps moyen de réponse par semaine</h3>
         <div className="h-56">
-          {(analyticsData?.temps_moyen_par_semaine ?? []).length === 0 ? (
-            <EmptyChart />
-          ) : (
+          {(analyticsData?.temps_moyen_par_semaine ?? []).length === 0 ? <EmptyChart /> : (
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={analyticsData?.temps_moyen_par_semaine ?? []}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis
-                  dataKey="week"
-                  tick={{ fontSize: 11 }}
-                  tickFormatter={(v) => format(new Date(v), 'dd/MM')}
-                />
+                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                <XAxis dataKey="week" tick={{ fontSize: 11 }} tickFormatter={(v) => format(new Date(v), 'dd/MM')} />
                 <YAxis tick={{ fontSize: 11 }} unit="h" />
                 <Tooltip
-                  // @ts-expect-error recharts ValueType includes undefined but we know it's a number here
+                  // @ts-expect-error recharts ValueType includes undefined
                   formatter={(v: number) => [v < 1 ? `${Math.round(v * 60)}min` : `${v}h`, 'Temps moyen']}
                   labelFormatter={(l) => `Semaine du ${format(new Date(l), 'dd MMM', { locale: fr })}`}
                 />
-                <Bar dataKey="avg_hours" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="avg_hours" fill="#111827" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -394,7 +345,7 @@ export default function AnalysesPage() {
       </div>
 
       {/* Breakdowns */}
-      <div className="grid grid-cols-2 gap-4 mb-6">
+      <div className="grid grid-cols-2 gap-4 mb-4">
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <h3 className="text-sm font-semibold text-gray-900 mb-3">Par produit</h3>
           {Object.keys(stats.byProduct).length === 0 ? (
@@ -403,9 +354,9 @@ export default function AnalysesPage() {
             <div className="space-y-2">
               {Object.entries(stats.byProduct).sort((a, b) => b[1] - a[1]).map(([prod, count]) => (
                 <div key={prod} className="flex items-center gap-3">
-                  <span className="w-20 text-xs text-gray-600 shrink-0">{prod}</span>
-                  <div className="flex-1 bg-gray-100 rounded-full h-2">
-                    <div className="bg-blue-500 h-2 rounded-full transition-all" style={{ width: `${(count / stats.total) * 100}%` }} />
+                  <span className="w-20 text-xs text-gray-500 shrink-0">{prod}</span>
+                  <div className="flex-1 bg-gray-100 rounded-full h-1.5">
+                    <div className="bg-gray-900 h-1.5 rounded-full transition-all" style={{ width: `${(count / stats.total) * 100}%` }} />
                   </div>
                   <span className="text-xs font-medium text-gray-900 w-5 text-right">{count}</span>
                 </div>
@@ -422,9 +373,9 @@ export default function AnalysesPage() {
             <div className="space-y-2">
               {Object.entries(stats.byUnderwriter).sort((a, b) => b[1] - a[1]).map(([uw, count]) => (
                 <div key={uw} className="flex items-center gap-3">
-                  <span className="w-28 text-xs text-gray-600 shrink-0 truncate">{uw}</span>
-                  <div className="flex-1 bg-gray-100 rounded-full h-2">
-                    <div className="bg-green-500 h-2 rounded-full transition-all" style={{ width: `${(count / stats.total) * 100}%` }} />
+                  <span className="w-28 text-xs text-gray-500 shrink-0 truncate">{uw}</span>
+                  <div className="flex-1 bg-gray-100 rounded-full h-1.5">
+                    <div className="bg-gray-900 h-1.5 rounded-full transition-all" style={{ width: `${(count / stats.total) * 100}%` }} />
                   </div>
                   <span className="text-xs font-medium text-gray-900 w-5 text-right">{count}</span>
                 </div>
@@ -447,7 +398,7 @@ export default function AnalysesPage() {
               <thead>
                 <tr className="border-b border-gray-200 bg-gray-50">
                   {['Date', 'Commercial', 'Produit', 'Priorité', 'Statut', 'Underwriter', 'Tps réponse'].map(h => (
-                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
+                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -463,20 +414,18 @@ export default function AnalysesPage() {
                     : null
                   return (
                     <tr key={q.id} className={`border-b border-gray-100 hover:bg-gray-50 ${i === filtered.length - 1 ? 'border-b-0' : ''}`}>
-                      <td className="px-4 py-3 text-gray-500 whitespace-nowrap text-xs">{format(new Date(q.created_at), 'dd/MM/yy HH:mm')}</td>
+                      <td className="px-4 py-3 text-gray-400 whitespace-nowrap text-xs">{format(new Date(q.created_at), 'dd/MM/yy HH:mm')}</td>
                       <td className="px-4 py-3 text-gray-900 whitespace-nowrap">{q.sales_name}</td>
                       <td className="px-4 py-3">
                         <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded text-xs">{q.product_type}</span>
                       </td>
                       <td className="px-4 py-3">
-                        <span className={`text-xs font-medium ${q.priority === 'urgent' ? 'text-red-600' : q.priority === 'high' ? 'text-yellow-600' : 'text-green-600'}`}>
+                        <span className={`text-xs font-medium ${q.priority === 'urgent' ? 'text-red-600' : 'text-gray-500'}`}>
                           {PRIORITY_LABELS[q.priority]}
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        <span className={`text-xs font-medium ${q.status === 'answered' ? 'text-green-600' : q.status === 'in_progress' ? 'text-blue-600' : 'text-orange-600'}`}>
-                          {STATUS_LABELS[q.status]}
-                        </span>
+                        <span className="text-xs text-gray-500">{STATUS_LABELS[q.status]}</span>
                       </td>
                       <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{q.assigned_to || '—'}</td>
                       <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{responseHours !== null ? responseHours : '—'}</td>
