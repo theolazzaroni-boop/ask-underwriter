@@ -89,15 +89,12 @@ export function buildAskModal(channelId: string) {
         block_id: 'attachments',
         optional: true,
         element: {
-          type: 'plain_text_input' as const,
+          type: 'file_input' as const,
           action_id: 'value',
-          multiline: true,
-          placeholder: {
-            type: 'plain_text' as const,
-            text: 'Colle ici les liens vers tes fichiers (Google Drive, Notion, Slack...), un par ligne',
-          },
+          filetypes: ['pdf', 'png', 'jpg', 'jpeg', 'webp'],
+          max_files: 5,
         },
-        label: { type: 'plain_text' as const, text: 'Images / Documents (facultatif)' },
+        label: { type: 'plain_text' as const, text: 'Fichiers joints (facultatif)' },
       },
     ],
   }

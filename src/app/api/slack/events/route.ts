@@ -1,21 +1,66 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifySlackSignature, slack, PRIORITY_LABELS } from '@/lib/slack'
+import { put } from '@vercel/blob'
 import sql from '@/lib/db'
 
+interface SlackFile {
+  id: string
+  name: string
+  mimetype: string
+  size: number
+  url_private_download: string
+}
+
+async function uploadSlackFilesToBlob(
+  slackFiles: SlackFile[],
+  questionId: string
+): Promise<void> {
+  await Promise.all(
+    slackFiles.map(async (file) => {
+      try {
+        // Download from Slack (private URL requires bot token auth)
+        const res = await fetch(file.url_private_download, {
+          headers: { Authorization: `Bearer ${process.env.SLACK_BOT_TOKEN}` },
+        })
+        if (!res.ok) throw new Error(`Failed to download Slack file ${file.id}`)
+
+        const buffer = await res.arrayBuffer()
+
+        // Upload to Vercel Blob
+        const blob = await put(
+          `questions/${questionId}/${Date.now()}-${file.name}`,
+          buffer,
+          { access: 'public', contentType: file.mimetype }
+        )
+
+        // Save to DB
+        await sql`
+          INSERT INTO attachments (question_id, file_name, file_type, file_size, blob_url, blob_pathname, slack_file_id)
+          VALUES (${questionId}, ${file.name}, ${file.mimetype}, ${file.size}, ${blob.url}, ${blob.pathname}, ${file.id})
+        `
+      } catch (err) {
+        console.error(`Failed to process Slack file ${file.name}:`, err)
+      }
+    })
+  )
+}
+
 async function processSubmission(payload: Record<string, unknown>) {
-  const values = (payload.view as { state: { values: Record<string, Record<string, { selected_option?: { value: string }; value?: string }>> } }).state.values
+  const values = (payload.view as { state: { values: Record<string, Record<string, { selected_option?: { value: string }; value?: string; files?: SlackFile[] }>> } }).state.values
   const product = values.product.value.selected_option?.value ?? ''
   const priority = values.priority.value.selected_option?.value ?? 'normal'
   const description = values.description.value.value ?? ''
   const boUrl = values.bo_url?.value?.value ?? null
   const hubspotUrl = values.hubspot_url?.value?.value ?? null
-  const attachments = values.attachments?.value?.value ?? null
   const channelId = (payload.view as { private_metadata: string }).private_metadata
   const user = payload.user as { id: string; username: string }
 
+  // Extract uploaded files from file_input
+  const slackFiles: SlackFile[] = values.attachments?.value?.files ?? []
+
   const [question] = await sql`
-    INSERT INTO questions (product_type, description, bo_url, hubspot_url, attachments, priority, sales_slack_id, sales_name, slack_channel_id, status)
-    VALUES (${product}, ${description}, ${boUrl}, ${hubspotUrl}, ${attachments}, ${priority}, ${user.id}, ${user.username}, ${channelId}, 'pending')
+    INSERT INTO questions (product_type, description, bo_url, hubspot_url, priority, sales_slack_id, sales_name, slack_channel_id, status)
+    VALUES (${product}, ${description}, ${boUrl}, ${hubspotUrl}, ${priority}, ${user.id}, ${user.username}, ${channelId}, 'pending')
     RETURNING *
   `
 
@@ -24,8 +69,19 @@ async function processSubmission(payload: Record<string, unknown>) {
     return
   }
 
+  // Upload Slack files to Vercel Blob (non-blocking, don't fail the response)
+  if (slackFiles.length > 0) {
+    uploadSlackFilesToBlob(slackFiles, question.id).catch((err) =>
+      console.error('File upload error:', err)
+    )
+  }
+
   const dashboardUrl = `${process.env.NEXT_PUBLIC_APP_URL}/questions/${question.id}`
   const priorityLabel = PRIORITY_LABELS[priority] ?? priority
+
+  const filesSummary = slackFiles.length > 0
+    ? `\n📎 ${slackFiles.length} fichier${slackFiles.length > 1 ? 's' : ''} joint${slackFiles.length > 1 ? 's' : ''}`
+    : ''
 
   const blocks = [
     {
@@ -42,7 +98,7 @@ async function processSubmission(payload: Record<string, unknown>) {
         { type: 'mrkdwn', text: `*Priorité*\n${priorityLabel}` },
         ...(boUrl ? [{ type: 'mrkdwn', text: `*Back-Office*\n<${boUrl}|Voir le dossier>` }] : []),
         ...(hubspotUrl ? [{ type: 'mrkdwn', text: `*HubSpot*\n<${hubspotUrl}|Voir le contact>` }] : []),
-        ...(attachments ? [{ type: 'mrkdwn', text: `*Fichiers joints*\n${attachments}` }] : []),
+        ...(slackFiles.length > 0 ? [{ type: 'mrkdwn', text: `*Fichiers*\n${slackFiles.map(f => f.name).join(', ')}` }] : []),
       ],
     },
     {
@@ -61,7 +117,7 @@ async function processSubmission(payload: Record<string, unknown>) {
   const msg = await slack.chat.postMessage({
     channel: channelId,
     blocks,
-    text: `Nouvelle demande ${product} de ${user.username} — ${priorityLabel}`,
+    text: `Nouvelle demande ${product} de ${user.username} — ${priorityLabel}${filesSummary}`,
   })
 
   if (msg.ts) {
@@ -77,7 +133,7 @@ async function processSubmission(payload: Record<string, unknown>) {
 
     await slack.chat.postMessage({
       channel: underwritingChannel,
-      text: `🔔 Nouvelle demande *${priorityLabel}* — *${product}* de <@${user.id}>\n>${description.slice(0, 200)}${description.length > 200 ? '...' : ''}\n${links ? `${links}\n` : ''}<${dashboardUrl}|Voir dans le dashboard>`,
+      text: `🔔 Nouvelle demande *${priorityLabel}* — *${product}* de <@${user.id}>\n>${description.slice(0, 200)}${description.length > 200 ? '...' : ''}\n${links ? `${links}\n` : ''}${filesSummary ? `${filesSummary}\n` : ''}<${dashboardUrl}|Voir dans le dashboard>`,
     })
   }
 }
