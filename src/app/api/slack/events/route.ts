@@ -9,12 +9,13 @@ async function processSubmission(payload: Record<string, unknown>) {
   const description = values.description.value.value ?? ''
   const boUrl = values.bo_url?.value?.value ?? null
   const hubspotUrl = values.hubspot_url?.value?.value ?? null
+  const attachments = values.attachments?.value?.value ?? null
   const channelId = (payload.view as { private_metadata: string }).private_metadata
   const user = payload.user as { id: string; username: string }
 
   const [question] = await sql`
-    INSERT INTO questions (product_type, description, bo_url, hubspot_url, priority, sales_slack_id, sales_name, slack_channel_id, status)
-    VALUES (${product}, ${description}, ${boUrl}, ${hubspotUrl}, ${priority}, ${user.id}, ${user.username}, ${channelId}, 'pending')
+    INSERT INTO questions (product_type, description, bo_url, hubspot_url, attachments, priority, sales_slack_id, sales_name, slack_channel_id, status)
+    VALUES (${product}, ${description}, ${boUrl}, ${hubspotUrl}, ${attachments}, ${priority}, ${user.id}, ${user.username}, ${channelId}, 'pending')
     RETURNING *
   `
 
@@ -41,6 +42,7 @@ async function processSubmission(payload: Record<string, unknown>) {
         { type: 'mrkdwn', text: `*Priorité*\n${priorityLabel}` },
         ...(boUrl ? [{ type: 'mrkdwn', text: `*Back-Office*\n<${boUrl}|Voir le dossier>` }] : []),
         ...(hubspotUrl ? [{ type: 'mrkdwn', text: `*HubSpot*\n<${hubspotUrl}|Voir le contact>` }] : []),
+        ...(attachments ? [{ type: 'mrkdwn', text: `*Fichiers joints*\n${attachments}` }] : []),
       ],
     },
     {

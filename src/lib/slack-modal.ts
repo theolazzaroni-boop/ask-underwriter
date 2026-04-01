@@ -84,6 +84,21 @@ export function buildAskModal(channelId: string) {
         },
         label: { type: 'plain_text' as const, text: 'Lien HubSpot (facultatif)' },
       },
+      {
+        type: 'input',
+        block_id: 'attachments',
+        optional: true,
+        element: {
+          type: 'plain_text_input' as const,
+          action_id: 'value',
+          multiline: true,
+          placeholder: {
+            type: 'plain_text' as const,
+            text: 'Colle ici les liens vers tes fichiers (Google Drive, Notion, Slack...), un par ligne',
+          },
+        },
+        label: { type: 'plain_text' as const, text: 'Images / Documents (facultatif)' },
+      },
     ],
   }
 }

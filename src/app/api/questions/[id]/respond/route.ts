@@ -58,7 +58,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   await Promise.all([
     sql`UPDATE answers SET sent_to_slack = ${sentToSlack} WHERE id = ${answer.id}`,
-    sql`UPDATE questions SET status = 'answered', assigned_to = ${underwriter_name} WHERE id = ${id}`,
+    sql`UPDATE questions SET status = CASE WHEN status = 'pending' THEN 'in_progress' ELSE status END, assigned_to = ${underwriter_name} WHERE id = ${id}`,
   ])
 
   // Enrich knowledge base

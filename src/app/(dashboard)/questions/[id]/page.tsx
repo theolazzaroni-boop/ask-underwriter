@@ -104,15 +104,30 @@ export default async function QuestionPage({ params }: { params: Promise<{ id: s
           {question.bo_url && (
             <div>
               <p className="text-xs text-gray-400 mb-0.5">Back-Office</p>
-              <a
-                href={question.bo_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 font-medium"
-              >
-                Voir le dossier
-                <ExternalLink className="w-3.5 h-3.5" />
+              <a href={question.bo_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 font-medium">
+                Voir le dossier <ExternalLink className="w-3.5 h-3.5" />
               </a>
+            </div>
+          )}
+          {(question as unknown as Record<string, string>).hubspot_url && (
+            <div>
+              <p className="text-xs text-gray-400 mb-0.5">HubSpot</p>
+              <a href={(question as unknown as Record<string, string>).hubspot_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 font-medium">
+                Voir le contact <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            </div>
+          )}
+          {(question as unknown as Record<string, string>).attachments && (
+            <div className="col-span-2">
+              <p className="text-xs text-gray-400 mb-1">Fichiers joints</p>
+              <div className="space-y-1">
+                {(question as unknown as Record<string, string>).attachments.split('\n').filter(Boolean).map((url, i) => (
+                  <a key={i} href={url.trim()} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 truncate">
+                    <ExternalLink className="w-3 h-3 shrink-0" />
+                    {url.trim()}
+                  </a>
+                ))}
+              </div>
             </div>
           )}
         </div>

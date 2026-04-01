@@ -126,7 +126,7 @@ export default function AnalysesPage() {
       : null
     const avgHours = avgMs !== null ? avgMs / (1000 * 60 * 60) : null
     const avgHoursDisplay = avgHours !== null
-      ? (avgHours < 1 ? '< 1h' : `${Math.round(avgHours)}h`)
+      ? (avgHours < 1 ? `${Math.round(avgHours * 60)}min` : `${Math.round(avgHours)}h`)
       : null
 
     const byProduct: Record<string, number> = {}
@@ -459,7 +459,7 @@ export default function AnalysesPage() {
                     : null
                   const responseHoursRaw = responseMs !== null ? responseMs / (1000 * 60 * 60) : null
                   const responseHours = responseHoursRaw !== null
-                    ? (responseHoursRaw < 1 ? '< 1h' : `${Math.round(responseHoursRaw)}h`)
+                    ? (responseHoursRaw < 1 ? `${Math.round(responseHoursRaw * 60)}min` : `${Math.round(responseHoursRaw)}h`)
                     : null
                   return (
                     <tr key={q.id} className={`border-b border-gray-100 hover:bg-gray-50 ${i === filtered.length - 1 ? 'border-b-0' : ''}`}>
