@@ -6,6 +6,7 @@ import { format, formatDistanceToNow } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { ArrowLeft, ExternalLink, Clock, CheckCircle, AlertCircle } from 'lucide-react'
 import ResponseForm from './ResponseForm'
+import AttachmentsSection from './AttachmentsSection'
 
 const PRIORITY_CONFIG: Record<QuestionPriority, { label: string; className: string }> = {
   urgent: { label: '🔴 Urgent', className: 'bg-red-100 text-red-700' },
@@ -117,19 +118,6 @@ export default async function QuestionPage({ params }: { params: Promise<{ id: s
               </a>
             </div>
           )}
-          {(question as unknown as Record<string, string>).attachments && (
-            <div className="col-span-2">
-              <p className="text-xs text-gray-400 mb-1">Fichiers joints</p>
-              <div className="space-y-1">
-                {(question as unknown as Record<string, string>).attachments.split('\n').filter(Boolean).map((url, i) => (
-                  <a key={i} href={url.trim()} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 truncate">
-                    <ExternalLink className="w-3 h-3 shrink-0" />
-                    {url.trim()}
-                  </a>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
@@ -172,6 +160,12 @@ export default async function QuestionPage({ params }: { params: Promise<{ id: s
           ))}
         </div>
       )}
+
+      {/* Attachments */}
+      <AttachmentsSection
+        questionId={question.id}
+        canAdd={question.status !== 'answered'}
+      />
 
       {/* Response form (only if not yet answered) */}
       {question.status !== 'answered' && (
