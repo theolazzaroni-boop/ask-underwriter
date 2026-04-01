@@ -68,9 +68,14 @@ async function processSubmission(payload: Record<string, unknown>) {
 
   const underwritingChannel = process.env.SLACK_UNDERWRITING_CHANNEL_ID
   if (underwritingChannel && underwritingChannel !== channelId) {
+    const links = [
+      boUrl ? `*Back-Office* <${boUrl}|Voir le dossier>` : null,
+      hubspotUrl ? `*HubSpot* <${hubspotUrl}|Voir le contact>` : null,
+    ].filter(Boolean).join('   |   ')
+
     await slack.chat.postMessage({
       channel: underwritingChannel,
-      text: `🔔 Nouvelle demande *${priorityLabel}* — *${product}* de <@${user.id}>\n<${dashboardUrl}|Voir dans le dashboard>`,
+      text: `🔔 Nouvelle demande *${priorityLabel}* — *${product}* de <@${user.id}>\n>${description.slice(0, 200)}${description.length > 200 ? '...' : ''}\n${links ? `${links}\n` : ''}<${dashboardUrl}|Voir dans le dashboard>`,
     })
   }
 }
