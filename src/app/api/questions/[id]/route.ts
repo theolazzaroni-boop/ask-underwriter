@@ -30,6 +30,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ error: 'No valid fields' }, { status: 400 })
   }
 
+  // Set first_assigned_at when assigned_to is set for the first time
+  if (updates.assigned_to) {
+    const [existing] = await sql`SELECT first_assigned_at FROM questions WHERE id = ${id}`
+    if (existing && !existing.first_assigned_at) {
+      updates.first_assigned_at = new Date().toISOString()
+    }
+  }
+
   const setClauses = Object.keys(updates).map((k, i) => `${k} = $${i + 2}`).join(', ')
   const values = [id, ...Object.values(updates)]
 

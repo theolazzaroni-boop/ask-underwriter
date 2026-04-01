@@ -5,6 +5,7 @@ import { Download } from 'lucide-react'
 import { format, subDays, startOfDay } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { QuestionWithAnswers } from '@/lib/types'
+import Link from 'next/link'
 import {
   LineChart,
   Line,
@@ -23,6 +24,24 @@ import {
 
 const PRODUCT_TYPES = ['RCPH', 'RCPHes', 'RCPA', 'RCPAxa', 'MRPH', 'MRPW', 'MRPW-es', 'MRPA', 'MUTA']
 
+const PRODUCT_COLORS: Record<string, string> = {
+  RCPH:      '#3b82f6',
+  RCPHes:    '#6366f1',
+  RCPA:      '#10b981',
+  RCPAxa:    '#059669',
+  MRPH:      '#f59e0b',
+  MRPW:      '#f97316',
+  'MRPW-es': '#ef4444',
+  MRPA:      '#8b5cf6',
+  MUTA:      '#06b6d4',
+}
+
+function productColor(name: string, index: number) {
+  return PRODUCT_COLORS[name] ?? `hsl(${index * 47}, 65%, 50%)`
+}
+
+const UNDERWRITER_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316']
+
 const PRIORITY_LABELS: Record<string, string> = { normal: 'Normal', high: 'Haute', urgent: 'Urgent' }
 const STATUS_LABELS: Record<string, string> = { pending: 'En attente', in_progress: 'En cours', answered: 'Traité' }
 
@@ -33,8 +52,6 @@ const PERIOD_OPTIONS = [
   { value: '90', label: '90 derniers jours' },
 ]
 
-const CHART_COLORS = ['#111827', '#4b5563', '#9ca3af', '#d1d5db', '#374151', '#6b7280', '#1f2937', '#e5e7eb']
-
 interface AnalyticsData {
   demandes_par_jour: { day: string; total: number }[]
   par_produit: { product: string; total: number }[]
@@ -42,10 +59,24 @@ interface AnalyticsData {
   temps_moyen_par_semaine: { week: string; avg_hours: number }[]
 }
 
-function EmptyChart() {
+function formatDuration(hours: number) {
+  if (hours < 1 / 60) return `${Math.round(hours * 3600)}s`
+  if (hours < 1) return `${Math.round(hours * 60)}min`
+  return `${Math.round(hours)}h`
+}
+
+function computeMA7(data: { day: string; total: number }[]) {
+  return data.map((item, i) => {
+    const slice = data.slice(Math.max(0, i - 6), i + 1)
+    const avg = slice.reduce((s, d) => s + d.total, 0) / slice.length
+    return { ...item, ma7: Math.round(avg * 10) / 10 }
+  })
+}
+
+function EmptyChart({ message }: { message?: string }) {
   return (
     <div className="flex items-center justify-center h-full text-sm text-gray-400">
-      Aucune donnée sur cette période
+      {message ?? 'Aucune donnée sur cette période'}
     </div>
   )
 }
@@ -55,7 +86,7 @@ export default function AnalysesPage() {
   const [loading, setLoading] = useState(true)
   const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(null)
 
-  const [period, setPeriod] = useState('all')
+  const [period, setPeriod] = useState('30')
   const [product, setProduct] = useState('all')
   const [underwriter, setUnderwriter] = useState('all')
   const [sales, setSales] = useState('all')
@@ -73,28 +104,19 @@ export default function AnalysesPage() {
     fetch(url).then(r => r.json()).then(setAnalyticsData)
   }, [period])
 
-  const underwriters = useMemo(() => {
-    const set = new Set(questions.map(q => q.assigned_to).filter(Boolean))
-    return Array.from(set) as string[]
-  }, [questions])
+  const underwriters = useMemo(() => Array.from(new Set(questions.map(q => q.assigned_to).filter(Boolean))) as string[], [questions])
+  const salesPeople = useMemo(() => Array.from(new Set(questions.map(q => q.sales_name))), [questions])
 
-  const salesPeople = useMemo(() => {
-    return Array.from(new Set(questions.map(q => q.sales_name)))
-  }, [questions])
-
-  const filtered = useMemo(() => {
-    return questions.filter(q => {
-      if (period !== 'all') {
-        const cutoff = startOfDay(subDays(new Date(), parseInt(period)))
-        if (new Date(q.created_at) < cutoff) return false
-      }
-      if (product !== 'all' && q.product_type !== product) return false
-      if (underwriter !== 'all' && q.assigned_to !== underwriter) return false
-      if (sales !== 'all' && q.sales_name !== sales) return false
-      if (status !== 'all' && q.status !== status) return false
-      return true
-    })
-  }, [questions, period, product, underwriter, sales, status])
+  const filtered = useMemo(() => questions.filter(q => {
+    if (period !== 'all') {
+      if (new Date(q.created_at) < startOfDay(subDays(new Date(), parseInt(period)))) return false
+    }
+    if (product !== 'all' && q.product_type !== product) return false
+    if (underwriter !== 'all' && q.assigned_to !== underwriter) return false
+    if (sales !== 'all' && q.sales_name !== sales) return false
+    if (status !== 'all' && q.status !== status) return false
+    return true
+  }), [questions, period, product, underwriter, sales, status])
 
   const prevFiltered = useMemo(() => {
     if (period === 'all') return []
@@ -102,8 +124,8 @@ export default function AnalysesPage() {
     const periodStart = startOfDay(subDays(new Date(), days))
     const prevStart = startOfDay(subDays(new Date(), days * 2))
     return questions.filter(q => {
-      const date = new Date(q.created_at)
-      if (date < prevStart || date >= periodStart) return false
+      const d = new Date(q.created_at)
+      if (d < prevStart || d >= periodStart) return false
       if (product !== 'all' && q.product_type !== product) return false
       if (underwriter !== 'all' && q.assigned_to !== underwriter) return false
       if (sales !== 'all' && q.sales_name !== sales) return false
@@ -119,72 +141,67 @@ export default function AnalysesPage() {
 
     const responseTimes = filtered
       .filter(q => q.status === 'answered' && q.answers?.length > 0)
-      .map(q => new Date(q.answers[0].created_at).getTime() - new Date(q.created_at).getTime())
+      .map(q => (new Date(q.answers[0].created_at).getTime() - new Date(q.created_at).getTime()) / 3600000)
 
-    const avgMs = responseTimes.length > 0
+    const avgHours = responseTimes.length > 0
       ? responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length
       : null
-    const avgHours = avgMs !== null ? avgMs / (1000 * 60 * 60) : null
-    const avgHoursDisplay = avgHours !== null
-      ? (avgHours < 1 ? `${Math.round(avgHours * 60)}min` : `${Math.round(avgHours)}h`)
-      : null
 
-    const byProduct: Record<string, number> = {}
-    filtered.forEach(q => { byProduct[q.product_type] = (byProduct[q.product_type] || 0) + 1 })
+    // SLA: % answered within 4h
+    const slaTarget = 4
+    const slaCount = responseTimes.filter(h => h <= slaTarget).length
+    const slaRate = responseTimes.length > 0 ? Math.round((slaCount / responseTimes.length) * 100) : null
 
-    const byUnderwriter: Record<string, number> = {}
-    filtered.forEach(q => {
-      if (q.assigned_to) byUnderwriter[q.assigned_to] = (byUnderwriter[q.assigned_to] || 0) + 1
-    })
-
+    // Prev period
     const prevTotal = prevFiltered.length
     const prevAnswered = prevFiltered.filter(q => q.status === 'answered').length
-    const prevPending = prevFiltered.filter(q => q.status === 'pending').length
     const prevResponseTimes = prevFiltered
       .filter(q => q.status === 'answered' && q.answers?.length > 0)
-      .map(q => new Date(q.answers[0].created_at).getTime() - new Date(q.created_at).getTime())
-    const prevAvgMs = prevResponseTimes.length > 0
+      .map(q => (new Date(q.answers[0].created_at).getTime() - new Date(q.created_at).getTime()) / 3600000)
+    const prevAvgHours = prevResponseTimes.length > 0
       ? prevResponseTimes.reduce((a, b) => a + b, 0) / prevResponseTimes.length
       : null
-    const prevAvgHours = prevAvgMs !== null ? prevAvgMs / (1000 * 60 * 60) : null
 
-    return { total, answered, pending, avgHours, avgHoursDisplay, byProduct, byUnderwriter, prevTotal, prevAnswered, prevPending, prevAvgHours }
-  }, [filtered, prevFiltered])
+    // Real-time load per underwriter
+    const openByUnderwriter: Record<string, number> = {}
+    questions
+      .filter(q => q.status !== 'answered' && q.assigned_to)
+      .forEach(q => {
+        openByUnderwriter[q.assigned_to!] = (openByUnderwriter[q.assigned_to!] || 0) + 1
+      })
+
+    return { total, answered, pending, avgHours, slaRate, prevTotal, prevAnswered, prevAvgHours, openByUnderwriter }
+  }, [filtered, prevFiltered, questions])
 
   function exportCSV() {
-    const headers = ['Date', 'Commercial', 'Produit', 'Priorité', 'Statut', 'Underwriter', 'Description', 'Temps de réponse (h)']
+    const headers = ['Date', 'Commercial', 'Produit', 'Priorité', 'Statut', 'Underwriter', 'Description', 'Temps de réponse']
     const rows = filtered.map(q => {
       const firstAnswer = q.answers?.[0]
-      const responseMs = firstAnswer
-        ? (new Date(firstAnswer.created_at).getTime() - new Date(q.created_at).getTime())
-        : null
-      const responseHours = responseMs !== null ? Math.round(responseMs / (1000 * 60 * 60)) : ''
+      const responseMs = firstAnswer ? new Date(firstAnswer.created_at).getTime() - new Date(q.created_at).getTime() : null
+      const responseHours = responseMs !== null ? responseMs / 3600000 : null
       return [
         format(new Date(q.created_at), 'dd/MM/yyyy HH:mm'),
-        q.sales_name,
-        q.product_type,
+        q.sales_name, q.product_type,
         PRIORITY_LABELS[q.priority] || q.priority,
         STATUS_LABELS[q.status] || q.status,
         q.assigned_to || '',
         `"${q.description.replace(/"/g, '""')}"`,
-        responseHours,
+        responseHours !== null ? formatDuration(responseHours) : '',
       ]
     })
     const csv = [headers, ...rows].map(r => r.join(';')).join('\n')
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
+    const a = document.createElement('a'); a.href = url
     a.download = `ask-underwriter-${format(new Date(), 'yyyy-MM-dd')}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
+    a.click(); URL.revokeObjectURL(url)
   }
 
-  if (loading) {
-    return <div className="p-8 text-sm text-gray-400">Chargement...</div>
-  }
+  if (loading) return <div className="p-8 text-sm text-gray-400">Chargement...</div>
 
   const selectClass = "text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-gray-900 bg-white text-gray-700"
+  const demandesAvecMA = computeMA7(analyticsData?.demandes_par_jour ?? [])
+  const hasTrend = period !== 'all'
 
   return (
     <div className="p-8 max-w-6xl">
@@ -193,10 +210,7 @@ export default function AnalysesPage() {
           <h1 className="text-2xl font-bold text-gray-900">Analyses</h1>
           <p className="text-sm text-gray-400 mt-0.5">Analyse des demandes underwriting</p>
         </div>
-        <button
-          onClick={exportCSV}
-          className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors"
-        >
+        <button onClick={exportCSV} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors">
           <Download className="w-4 h-4" />
           Exporter CSV
         </button>
@@ -229,58 +243,86 @@ export default function AnalysesPage() {
 
       {/* KPI cards */}
       <div className="grid grid-cols-4 gap-4 mb-6">
-        {[
-          { label: 'Total demandes', value: stats.total, prev: stats.prevTotal, trendPositive: (d: number) => d > 0 },
-          { label: 'En attente', value: stats.pending, prev: stats.prevPending, trendPositive: (d: number) => d < 0 },
-          { label: 'Traitées', value: stats.answered, prev: stats.prevAnswered, trendPositive: (d: number) => d > 0 },
-          {
-            label: 'Temps moyen',
-            value: stats.avgHoursDisplay ?? '—',
-            prev: stats.prevAvgHours !== null && stats.avgHours !== null ? Math.round(stats.prevAvgHours) : null,
-            trendPositive: (d: number) => d < 0,
-            customDiff: stats.avgHours !== null && stats.prevAvgHours !== null
-              ? Math.round(stats.avgHours) - Math.round(stats.prevAvgHours)
-              : null,
-          },
-        ].map(card => {
-          const hasTrend = period !== 'all' && card.prev !== null && card.prev !== undefined
-          const diff = hasTrend
-            ? (card.customDiff !== undefined ? card.customDiff : (typeof card.value === 'number' ? card.value - (card.prev as number) : null))
-            : null
-          const isPositive = diff !== null ? card.trendPositive(diff) : false
-          return (
-            <div key={card.label} className="bg-white rounded-xl border border-gray-200 p-4">
-              <p className="text-xs text-gray-400 mb-1">{card.label}</p>
-              <p className="text-2xl font-bold text-gray-900">{card.value}</p>
-              {hasTrend && diff !== null && (
-                <p className={`text-xs mt-1 font-medium ${isPositive ? 'text-gray-600' : diff === 0 ? 'text-gray-400' : 'text-red-500'}`}>
-                  {diff > 0 ? '+' : ''}{card.label === 'Temps moyen' ? `${diff}h` : diff} vs période préc.
-                </p>
-              )}
-            </div>
-          )
-        })}
+        {/* Total */}
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <p className="text-xs text-gray-400 mb-1">Total demandes</p>
+          <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+          {hasTrend && stats.prevTotal > 0 && (() => {
+            const diff = stats.total - stats.prevTotal
+            return <p className={`text-xs mt-1 font-medium ${diff > 0 ? 'text-gray-600' : diff < 0 ? 'text-red-500' : 'text-gray-400'}`}>{diff > 0 ? '+' : ''}{diff} vs période préc.</p>
+          })()}
+        </div>
+        {/* Traitées */}
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <p className="text-xs text-gray-400 mb-1">Traitées</p>
+          <p className="text-2xl font-bold text-gray-900">{stats.answered}</p>
+          {stats.total > 0 && <p className="text-xs mt-1 text-gray-400">{Math.round((stats.answered / stats.total) * 100)}% du total</p>}
+        </div>
+        {/* Temps moyen */}
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <p className="text-xs text-gray-400 mb-1">Temps moyen de réponse</p>
+          <p className="text-2xl font-bold text-gray-900">{stats.avgHours !== null ? formatDuration(stats.avgHours) : '—'}</p>
+          {hasTrend && stats.prevAvgHours !== null && stats.avgHours !== null && (() => {
+            const diff = stats.avgHours - stats.prevAvgHours!
+            return <p className={`text-xs mt-1 font-medium ${diff < 0 ? 'text-gray-600' : diff > 0 ? 'text-red-500' : 'text-gray-400'}`}>{diff > 0 ? '+' : ''}{formatDuration(Math.abs(diff))} vs période préc.</p>
+          })()}
+        </div>
+        {/* SLA */}
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <p className="text-xs text-gray-400 mb-1">SLA — traité en moins de 4h</p>
+          <p className="text-2xl font-bold text-gray-900">{stats.slaRate !== null ? `${stats.slaRate}%` : '—'}</p>
+          <p className="text-xs mt-1 text-gray-400">cible 95%</p>
+        </div>
       </div>
 
-      {/* Chart 1 */}
+      {/* Charge temps réel par underwriter */}
+      {Object.keys(stats.openByUnderwriter).length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
+          <h3 className="text-sm font-semibold text-gray-900 mb-3">Charge en cours par underwriter</h3>
+          <div className="flex flex-wrap gap-3">
+            {Object.entries(stats.openByUnderwriter).sort((a, b) => b[1] - a[1]).map(([name, count]) => (
+              <div key={name} className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                <div className="w-5 h-5 rounded-full bg-gray-900 flex items-center justify-center text-white text-xs font-bold shrink-0">
+                  {name[0].toUpperCase()}
+                </div>
+                <span className="text-sm text-gray-700">{name}</span>
+                <span className={`text-sm font-bold ${count >= 5 ? 'text-red-600' : count >= 3 ? 'text-amber-600' : 'text-gray-900'}`}>{count}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Chart 1 — Demandes dans le temps + moyenne mobile */}
       <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4">
-        <h3 className="text-sm font-semibold text-gray-900 mb-4">Demandes dans le temps</h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-gray-900">Demandes dans le temps</h3>
+          <div className="flex items-center gap-4 text-xs text-gray-400">
+            <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-gray-300 inline-block" />Quotidien</span>
+            <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-gray-900 inline-block" />Moy. 7j</span>
+          </div>
+        </div>
         <div className="h-56">
-          {(analyticsData?.demandes_par_jour ?? []).length === 0 ? <EmptyChart /> : (
+          {demandesAvecMA.length === 0 ? (
+            <EmptyChart message="Pas encore assez de données" />
+          ) : demandesAvecMA.length === 1 ? (
+            <EmptyChart message="Pas encore assez de données pour afficher une tendance" />
+          ) : (
             <ResponsiveContainer width="100%" height={220}>
-              <LineChart data={analyticsData?.demandes_par_jour ?? []}>
+              <LineChart data={demandesAvecMA}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
                 <XAxis dataKey="day" tick={{ fontSize: 11 }} tickFormatter={(v) => format(new Date(v), 'dd/MM')} />
                 <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-                <Tooltip formatter={(v) => [v, 'Demandes']} labelFormatter={(l) => format(new Date(l), 'dd MMM yyyy', { locale: fr })} />
-                <Line type="monotone" dataKey="total" stroke="#111827" strokeWidth={2} dot={false} />
+                <Tooltip formatter={(v, n) => [v, n === 'total' ? 'Demandes' : 'Moy. 7j']} labelFormatter={(l) => format(new Date(l), 'dd MMM yyyy', { locale: fr })} />
+                <Line type="monotone" dataKey="total" stroke="#d1d5db" strokeWidth={1} dot={false} />
+                <Line type="monotone" dataKey="ma7" stroke="#111827" strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           )}
         </div>
       </div>
 
-      {/* Charts row */}
+      {/* Charts row — Pie + Bar */}
       <div className="grid grid-cols-2 gap-4 mb-4">
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <h3 className="text-sm font-semibold text-gray-900 mb-4">Par produit</h3>
@@ -289,8 +331,8 @@ export default function AnalysesPage() {
               <ResponsiveContainer width="100%" height={220}>
                 <PieChart>
                   <Pie data={analyticsData?.par_produit ?? []} dataKey="total" nameKey="product" cx="40%" outerRadius={80} label={false}>
-                    {(analyticsData?.par_produit ?? []).map((_: unknown, i: number) => (
-                      <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                    {(analyticsData?.par_produit ?? []).map((entry: { product: string }, i: number) => (
+                      <Cell key={i} fill={productColor(entry.product, i)} />
                     ))}
                   </Pie>
                   <Tooltip formatter={(v, n) => [v, n]} />
@@ -312,7 +354,7 @@ export default function AnalysesPage() {
                   <Tooltip formatter={(v) => [v, 'Demandes traitées']} />
                   <Bar dataKey="total" radius={[0, 4, 4, 0]}>
                     {(analyticsData?.par_underwriter ?? []).map((_: unknown, i: number) => (
-                      <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                      <Cell key={i} fill={UNDERWRITER_COLORS[i % UNDERWRITER_COLORS.length]} />
                     ))}
                   </Bar>
                 </BarChart>
@@ -322,8 +364,8 @@ export default function AnalysesPage() {
         </div>
       </div>
 
-      {/* Chart 4 */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4">
+      {/* Chart — Temps moyen par semaine */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
         <h3 className="text-sm font-semibold text-gray-900 mb-4">Temps moyen de réponse par semaine</h3>
         <div className="h-56">
           {(analyticsData?.temps_moyen_par_semaine ?? []).length === 0 ? <EmptyChart /> : (
@@ -331,61 +373,23 @@ export default function AnalysesPage() {
               <BarChart data={analyticsData?.temps_moyen_par_semaine ?? []}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
                 <XAxis dataKey="week" tick={{ fontSize: 11 }} tickFormatter={(v) => format(new Date(v), 'dd/MM')} />
-                <YAxis tick={{ fontSize: 11 }} unit="h" />
+                <YAxis
+                  tick={{ fontSize: 11 }}
+                  tickFormatter={(v) => formatDuration(v)}
+                />
                 <Tooltip
-                  // @ts-expect-error recharts ValueType includes undefined
-                  formatter={(v: number) => [v < 1 ? `${Math.round(v * 60)}min` : `${v}h`, 'Temps moyen']}
+                  // @ts-expect-error recharts ValueType
+                  formatter={(v: number) => [formatDuration(v), 'Temps moyen']}
                   labelFormatter={(l) => `Semaine du ${format(new Date(l), 'dd MMM', { locale: fr })}`}
                 />
-                <Bar dataKey="avg_hours" fill="#111827" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="avg_hours" fill="#3b82f6" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
         </div>
       </div>
 
-      {/* Breakdowns */}
-      <div className="grid grid-cols-2 gap-4 mb-4">
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <h3 className="text-sm font-semibold text-gray-900 mb-3">Par produit</h3>
-          {Object.keys(stats.byProduct).length === 0 ? (
-            <p className="text-sm text-gray-400">Aucune donnée</p>
-          ) : (
-            <div className="space-y-2">
-              {Object.entries(stats.byProduct).sort((a, b) => b[1] - a[1]).map(([prod, count]) => (
-                <div key={prod} className="flex items-center gap-3">
-                  <span className="w-20 text-xs text-gray-500 shrink-0">{prod}</span>
-                  <div className="flex-1 bg-gray-100 rounded-full h-1.5">
-                    <div className="bg-gray-900 h-1.5 rounded-full transition-all" style={{ width: `${(count / stats.total) * 100}%` }} />
-                  </div>
-                  <span className="text-xs font-medium text-gray-900 w-5 text-right">{count}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <h3 className="text-sm font-semibold text-gray-900 mb-3">Par underwriter</h3>
-          {Object.keys(stats.byUnderwriter).length === 0 ? (
-            <p className="text-sm text-gray-400">Aucune donnée</p>
-          ) : (
-            <div className="space-y-2">
-              {Object.entries(stats.byUnderwriter).sort((a, b) => b[1] - a[1]).map(([uw, count]) => (
-                <div key={uw} className="flex items-center gap-3">
-                  <span className="w-28 text-xs text-gray-500 shrink-0 truncate">{uw}</span>
-                  <div className="flex-1 bg-gray-100 rounded-full h-1.5">
-                    <div className="bg-gray-900 h-1.5 rounded-full transition-all" style={{ width: `${(count / stats.total) * 100}%` }} />
-                  </div>
-                  <span className="text-xs font-medium text-gray-900 w-5 text-right">{count}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Table */}
+      {/* Table — cliquable */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-200">
           <h3 className="text-sm font-semibold text-gray-900">{filtered.length} demande{filtered.length !== 1 ? 's' : ''}</h3>
@@ -405,30 +409,27 @@ export default function AnalysesPage() {
               <tbody>
                 {filtered.map((q, i) => {
                   const firstAnswer = q.answers?.[0]
-                  const responseMs = firstAnswer
-                    ? (new Date(firstAnswer.created_at).getTime() - new Date(q.created_at).getTime())
-                    : null
-                  const responseHoursRaw = responseMs !== null ? responseMs / (1000 * 60 * 60) : null
-                  const responseHours = responseHoursRaw !== null
-                    ? (responseHoursRaw < 1 ? `${Math.round(responseHoursRaw * 60)}min` : `${Math.round(responseHoursRaw)}h`)
-                    : null
+                  const responseMs = firstAnswer ? new Date(firstAnswer.created_at).getTime() - new Date(q.created_at).getTime() : null
+                  const responseHours = responseMs !== null ? responseMs / 3600000 : null
                   return (
-                    <tr key={q.id} className={`border-b border-gray-100 hover:bg-gray-50 ${i === filtered.length - 1 ? 'border-b-0' : ''}`}>
-                      <td className="px-4 py-3 text-gray-400 whitespace-nowrap text-xs">{format(new Date(q.created_at), 'dd/MM/yy HH:mm')}</td>
-                      <td className="px-4 py-3 text-gray-900 whitespace-nowrap">{q.sales_name}</td>
+                    <tr key={q.id} className={`border-b border-gray-100 hover:bg-gray-50 cursor-pointer ${i === filtered.length - 1 ? 'border-b-0' : ''}`}>
+                      <td className="px-4 py-3 text-gray-400 whitespace-nowrap text-xs">
+                        <Link href={`/questions/${q.id}`} className="block">{format(new Date(q.created_at), 'dd/MM/yy HH:mm')}</Link>
+                      </td>
+                      <td className="px-4 py-3 text-gray-900 whitespace-nowrap"><Link href={`/questions/${q.id}`} className="block">{q.sales_name}</Link></td>
                       <td className="px-4 py-3">
-                        <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded text-xs">{q.product_type}</span>
+                        <Link href={`/questions/${q.id}`} className="block">
+                          <span className="px-2 py-0.5 rounded text-xs font-medium text-white" style={{ backgroundColor: productColor(q.product_type, 0) }}>{q.product_type}</span>
+                        </Link>
                       </td>
                       <td className="px-4 py-3">
-                        <span className={`text-xs font-medium ${q.priority === 'urgent' ? 'text-red-600' : 'text-gray-500'}`}>
-                          {PRIORITY_LABELS[q.priority]}
-                        </span>
+                        <Link href={`/questions/${q.id}`} className="block">
+                          <span className={`text-xs font-medium ${q.priority === 'urgent' ? 'text-red-600' : 'text-gray-500'}`}>{PRIORITY_LABELS[q.priority]}</span>
+                        </Link>
                       </td>
-                      <td className="px-4 py-3">
-                        <span className="text-xs text-gray-500">{STATUS_LABELS[q.status]}</span>
-                      </td>
-                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{q.assigned_to || '—'}</td>
-                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{responseHours !== null ? responseHours : '—'}</td>
+                      <td className="px-4 py-3"><Link href={`/questions/${q.id}`} className="block text-xs text-gray-500">{STATUS_LABELS[q.status]}</Link></td>
+                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap"><Link href={`/questions/${q.id}`} className="block">{q.assigned_to || '—'}</Link></td>
+                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap"><Link href={`/questions/${q.id}`} className="block">{responseHours !== null ? formatDuration(responseHours) : '—'}</Link></td>
                     </tr>
                   )
                 })}
