@@ -17,8 +17,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const [answer] = await sql`
-    INSERT INTO answers (question_id, underwriter_name, content, sent_to_slack)
-    VALUES (${id}, ${underwriter_name}, ${content}, false)
+    INSERT INTO answers (question_id, underwriter_name, content, sent_to_slack, source, author_name)
+    VALUES (${id}, ${underwriter_name}, ${content}, false, 'web', ${underwriter_name})
     RETURNING *
   `
 

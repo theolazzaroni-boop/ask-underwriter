@@ -127,9 +127,20 @@ export default async function QuestionPage({ params }: { params: Promise<{ id: s
           {question.answers.map((answer) => (
             <div key={answer.id} className="bg-green-50 border border-green-200 rounded-xl p-5">
               <div className="flex items-center justify-between mb-2">
-                <p className="text-sm font-semibold text-green-800">{answer.underwriter_name}</p>
                 <div className="flex items-center gap-2">
-                  {answer.sent_to_slack && (
+                  <p className="text-sm font-semibold text-green-800">
+                    {answer.author_name || answer.underwriter_name}
+                  </p>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                    answer.source === 'slack'
+                      ? 'bg-purple-100 text-purple-700'
+                      : 'bg-blue-100 text-blue-700'
+                  }`}>
+                    {answer.source === 'slack' ? '# Slack' : 'Web app'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {answer.sent_to_slack && answer.source !== 'slack' && (
                     <span className="text-xs text-green-600 bg-green-100 px-2 py-0.5 rounded">
                       Envoyé dans Slack
                     </span>

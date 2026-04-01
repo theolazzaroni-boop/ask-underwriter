@@ -38,6 +38,9 @@ export interface Answer {
   underwriter_name: string
   content: string
   sent_to_slack: boolean
+  source?: 'web' | 'slack'
+  slack_message_ts?: string | null
+  author_name?: string | null
 }
 
 export interface QuestionWithAnswers extends Question {
