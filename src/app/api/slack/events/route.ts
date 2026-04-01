@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { after } from 'next/server'
 import { verifySlackSignature, slack, PRIORITY_LABELS } from '@/lib/slack'
 import { put } from '@vercel/blob'
 import sql from '@/lib/db'
@@ -8,38 +9,62 @@ interface SlackFile {
   name: string
   mimetype: string
   size: number
-  url_private_download: string
+  url_private_download?: string
 }
 
-async function uploadSlackFilesToBlob(
-  slackFiles: SlackFile[],
-  questionId: string
-): Promise<void> {
+async function getSlackFileDownloadUrl(fileId: string): Promise<{ url: string; name: string; mimetype: string; size: number } | null> {
+  try {
+    const res = await fetch(`https://slack.com/api/files.info?file=${fileId}`, {
+      headers: { Authorization: `Bearer ${process.env.SLACK_BOT_TOKEN}` },
+    })
+    const data = await res.json()
+    if (!data.ok || !data.file) return null
+    return {
+      url: data.file.url_private_download,
+      name: data.file.name,
+      mimetype: data.file.mimetype,
+      size: data.file.size,
+    }
+  } catch (err) {
+    console.error('files.info failed for', fileId, err)
+    return null
+  }
+}
+
+async function uploadSlackFilesToBlob(slackFiles: SlackFile[], questionId: string): Promise<void> {
   await Promise.all(
     slackFiles.map(async (file) => {
       try {
-        // Download from Slack (private URL requires bot token auth)
-        const res = await fetch(file.url_private_download, {
+        // Get download URL via files.info (more reliable than payload URL)
+        const info = await getSlackFileDownloadUrl(file.id)
+        if (!info) {
+          console.error('Could not get file info for', file.id)
+          return
+        }
+
+        // Download from Slack (requires files:read scope)
+        const res = await fetch(info.url, {
           headers: { Authorization: `Bearer ${process.env.SLACK_BOT_TOKEN}` },
         })
-        if (!res.ok) throw new Error(`Failed to download Slack file ${file.id}`)
+        if (!res.ok) throw new Error(`HTTP ${res.status} downloading ${info.name}`)
 
         const buffer = await res.arrayBuffer()
 
         // Upload to Vercel Blob
         const blob = await put(
-          `questions/${questionId}/${Date.now()}-${file.name}`,
+          `questions/${questionId}/${Date.now()}-${info.name}`,
           buffer,
-          { access: 'public', contentType: file.mimetype }
+          { access: 'public', contentType: info.mimetype }
         )
 
         // Save to DB
         await sql`
           INSERT INTO attachments (question_id, file_name, file_type, file_size, blob_url, blob_pathname, slack_file_id)
-          VALUES (${questionId}, ${file.name}, ${file.mimetype}, ${file.size}, ${blob.url}, ${blob.pathname}, ${file.id})
+          VALUES (${questionId}, ${info.name}, ${info.mimetype}, ${info.size}, ${blob.url}, ${blob.pathname}, ${file.id})
         `
+        console.log('Uploaded file', info.name, 'for question', questionId)
       } catch (err) {
-        console.error(`Failed to process Slack file ${file.name}:`, err)
+        console.error(`Failed to process file ${file.id}:`, err)
       }
     })
   )
@@ -55,7 +80,6 @@ async function processSubmission(payload: Record<string, unknown>) {
   const channelId = (payload.view as { private_metadata: string }).private_metadata
   const user = payload.user as { id: string; username: string }
 
-  // Extract uploaded files from file_input
   const slackFiles: SlackFile[] = values.attachments?.value?.files ?? []
 
   const [question] = await sql`
@@ -69,16 +93,8 @@ async function processSubmission(payload: Record<string, unknown>) {
     return
   }
 
-  // Upload Slack files to Vercel Blob (non-blocking, don't fail the response)
-  if (slackFiles.length > 0) {
-    uploadSlackFilesToBlob(slackFiles, question.id).catch((err) =>
-      console.error('File upload error:', err)
-    )
-  }
-
   const dashboardUrl = `${process.env.NEXT_PUBLIC_APP_URL}/questions/${question.id}`
   const priorityLabel = PRIORITY_LABELS[priority] ?? priority
-
   const filesSummary = slackFiles.length > 0
     ? `\n📎 ${slackFiles.length} fichier${slackFiles.length > 1 ? 's' : ''} joint${slackFiles.length > 1 ? 's' : ''}`
     : ''
@@ -135,6 +151,11 @@ async function processSubmission(payload: Record<string, unknown>) {
       channel: underwritingChannel,
       text: `🔔 Nouvelle demande *${priorityLabel}* — *${product}* de <@${user.id}>\n>${description.slice(0, 200)}${description.length > 200 ? '...' : ''}\n${links ? `${links}\n` : ''}${filesSummary ? `${filesSummary}\n` : ''}<${dashboardUrl}|Voir dans le dashboard>`,
     })
+  }
+
+  // Schedule file upload after response (avoids Slack 3s timeout)
+  if (slackFiles.length > 0) {
+    after(uploadSlackFilesToBlob(slackFiles, question.id))
   }
 }
 
