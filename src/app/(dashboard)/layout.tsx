@@ -3,10 +3,13 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState, useEffect } from 'react'
-import { MessageSquare, BarChart2, User } from 'lucide-react'
+import { MessageSquare, BarChart2, LogOut } from 'lucide-react'
+import { useClerk, useUser } from '@clerk/nextjs'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  const { signOut } = useClerk()
+  const { user } = useUser()
   const [underwriterName, setUnderwriterName] = useState('')
   const [editing, setEditing] = useState(false)
   const [nameInput, setNameInput] = useState('')
@@ -85,10 +88,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </Link>
         </nav>
 
-        <div className="px-3 py-3 border-t border-gray-200">
+        <div className="px-3 py-3 border-t border-gray-200 space-y-2">
+          {/* Underwriter name */}
           {editing ? (
             <div className="space-y-2">
-              <p className="text-xs text-gray-500 px-1">Qui êtes-vous ?</p>
+              <p className="text-xs text-gray-500 px-1">Votre prénom (pour les réponses)</p>
               <input
                 type="text"
                 value={nameInput}
@@ -110,15 +114,24 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               onClick={() => { setNameInput(underwriterName); setEditing(true) }}
               className="flex items-center gap-2 w-full text-left group px-1"
             >
-              <div className="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center shrink-0">
-                <User className="w-3.5 h-3.5 text-gray-500" />
+              <div className="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center shrink-0 text-xs font-bold text-gray-600">
+                {(underwriterName || user?.firstName || '?')[0].toUpperCase()}
               </div>
-              <div className="min-w-0">
-                <p className="text-xs font-medium text-gray-900 truncate">{underwriterName}</p>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-medium text-gray-900 truncate">{underwriterName || user?.fullName || user?.primaryEmailAddress?.emailAddress}</p>
                 <p className="text-xs text-gray-400 group-hover:text-gray-600">Changer</p>
               </div>
             </button>
           )}
+
+          {/* Sign out */}
+          <button
+            onClick={() => signOut({ redirectUrl: '/' })}
+            className="flex items-center gap-2 w-full px-1 py-1 text-xs text-gray-400 hover:text-gray-700 transition-colors"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            Se déconnecter
+          </button>
         </div>
       </aside>
 
